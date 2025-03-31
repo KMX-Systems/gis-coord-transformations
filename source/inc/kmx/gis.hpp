@@ -312,11 +312,11 @@ namespace kmx::gis
         }
     };
 
-    /// @brief Represents a geodetic coordinate (latitude, longitude, ellipsoidal height).
+    /// @brief Represents a geodetic coordinate (latitude, longitude, ellipsoidal altitude).
     ///
-    /// Coordinates are stored in degrees for latitude and longitude, and meters for height.
+    /// Coordinates are stored in degrees for latitude and longitude, and meters for altitude.
     /// Latitude ranges from -90 to +90 degrees. Longitude is typically normalized to -180 to +180 degrees.
-    /// Height is relative to the surface of the reference ellipsoid.
+    /// Altitude is relative to the surface of the reference ellipsoid.
     /// Coordinates are mutable, allowing for normalization or modification after calculation.
     ///
     /// @tparam T The floating-point type (e.g., `float`, `double`, `long double`) for the coordinate values.
@@ -334,8 +334,8 @@ namespace kmx::gis
         T latitude {};
         /// @brief Geodetic longitude in degrees. Expected range [-180, 180]. Positive east.
         T longitude {};
-        /// @brief Ellipsoidal height in meters. Height above the reference ellipsoid surface.
-        T height {};
+        /// @brief Ellipsoidal altitude in meters. Altitude above the reference ellipsoid surface.
+        T altitude {};
 
         /// @brief Normalizes the latitude and longitude coordinates to standard ranges.
         ///
@@ -369,7 +369,7 @@ namespace kmx::gis
 
         /// @brief Validates the geodetic coordinates.
         ///
-        /// Checks if latitude, longitude, and height are finite numbers.
+        /// Checks if latitude, longitude, and altitude are finite numbers.
         /// Checks if latitude is within the valid range [-90, 90] degrees.
         /// Does not check longitude range as it can be normalized.
         /// Does not modify the object's state.
@@ -378,14 +378,14 @@ namespace kmx::gis
         /// @throws std::invalid_argument if latitude is outside the [-90, 90] degree range.
         constexpr void validate() const noexcept(false)
         {
-            if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(height))
-                throw std::invalid_argument("Geodetic coordinates (latitude, longitude, height) must be finite");
+            if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude))
+                throw std::invalid_argument("Geodetic coordinates (latitude, longitude, altitude) must be finite");
             // Use a small tolerance for latitude range check if needed due to floating point inaccuracies?
             // Sticking to strict comparison for now.
             if (latitude < -K::values::ninety || latitude > K::values::ninety)
                 throw std::invalid_argument("Latitude must be between -90 and 90 degrees (got " + std::to_string(latitude) + ")");
             // Longitude validation might be needed depending on context, but normalize() handles wrapping.
-            // Height validation (e.g., reasonableness) is context-dependent and not done here.
+            // Altitude validation (e.g., reasonableness) is context-dependent and not done here.
         }
     };
 
@@ -393,7 +393,7 @@ namespace kmx::gis
     ///
     /// This structure is used for various Cartesian systems, such as Earth-Centered, Earth-Fixed (ECEF)
     /// geocentric coordinates or projected coordinates (often using X for Easting, Y for Northing,
-    /// and Z optionally for height or elevation). Coordinates are typically in meters.
+    /// and Z optionally for altitude or elevation). Coordinates are typically in meters.
     /// Coordinates are mutable.
     ///
     /// @tparam T The floating-point type (e.g., `float`, `double`, `long double`) for the coordinate values.
@@ -406,7 +406,7 @@ namespace kmx::gis
 
         T x {}; ///< X coordinate value (e.g., meters in ECEF or Easting in projected).
         T y {}; ///< Y coordinate value (e.g., meters in ECEF or Northing in projected).
-        T z {}; ///< Z coordinate value (e.g., meters in ECEF or Height/Elevation in projected).
+        T z {}; ///< Z coordinate value (e.g., meters in ECEF or Altitude/Elevation in projected).
 
         /// @brief Validates that the X, Y, Z coordinates are finite numbers.
         ///
@@ -428,7 +428,7 @@ namespace kmx::gis
 
     /// @brief Alias for `xyz_coord<T>` representing projected (map) coordinates.
     ///
-    /// Typically, X maps to Easting, Y maps to Northing, and Z represents height/elevation
+    /// Typically, X maps to Easting, Y maps to Northing, and Z represents altitude/elevation
     /// above a reference surface (often the geoid or ellipsoid, depending on the projection definition).
     /// @tparam T The floating-point type for coordinate values.
     template <typename T>
@@ -739,7 +739,7 @@ namespace kmx::gis
 
         // Core Transformation Functions
 
-        /// @brief Converts Geodetic coordinates (lat, lon, height) to Geocentric Cartesian (X, Y, Z) coordinates.
+        /// @brief Converts Geodetic coordinates (lat, lon, altitude) to Geocentric Cartesian (X, Y, Z) coordinates.
         ///
         /// Uses the provided ellipsoid definition for the transformation.
         /// Formulae:
@@ -748,7 +748,7 @@ namespace kmx::gis
         ///   Y = (N + h) * cos(lat) * sin(lon)
         ///   Z = (N * (1 - e^2) + h) * sin(lat)
         ///
-        /// @param[in] geo The input geodetic coordinate (latitude/longitude in degrees, height in meters).
+        /// @param[in] geo The input geodetic coordinate (latitude/longitude in degrees, altitude in meters).
         /// @param[in] ellip The reference ellipsoid parameters.
         /// @return The corresponding geocentric (ECEF) coordinate (X, Y, Z in meters).
         /// @throws std::invalid_argument if input `geo` coordinates are invalid (via `geo.validate()`).
@@ -779,7 +779,7 @@ namespace kmx::gis
                                          std::to_string(n_denominator));
 
             const T N = ellip.a / n_denominator;
-            const T h = geo.height; // Ellipsoidal height
+            const T h = geo.altitude; // Ellipsoidal altitude
 
             // Calculate X, Y, Z
             const T N_plus_h = N + h;
@@ -797,9 +797,9 @@ namespace kmx::gis
             return result;
         }
 
-        /// @brief Converts Geocentric Cartesian (X, Y, Z) coordinates to Geodetic coordinates (lat, lon, height).
+        /// @brief Converts Geocentric Cartesian (X, Y, Z) coordinates to Geodetic coordinates (lat, lon, altitude).
         ///
-        /// Uses an iterative algorithm (e.g., Bowring's or similar) to find the latitude and height.
+        /// Uses an iterative algorithm (e.g., Bowring's or similar) to find the latitude and altitude.
         /// Longitude is calculated directly from atan2(Y, X).
         ///
         /// @param[in] ecef The input geocentric (ECEF) coordinate (X, Y, Z in meters).
@@ -807,7 +807,7 @@ namespace kmx::gis
         /// @param[in] tolerance The convergence tolerance for the latitude iteration (radians). Defaults to
         /// `K::tolerance::default_geodetic`.
         /// @param[in] max_iterations The maximum number of iterations allowed. Defaults to `K::tolerance::max_iterations`.
-        /// @return The corresponding geodetic coordinate (latitude/longitude in degrees, height in meters). The coordinates are
+        /// @return The corresponding geodetic coordinate (latitude/longitude in degrees, altitude in meters). The coordinates are
         /// normalized.
         /// @throws std::invalid_argument if input `ecef` coordinates are invalid (via `ecef.validate()`).
         /// @throws std::runtime_error if the iteration fails to converge or encounters numerical instability.
@@ -840,8 +840,8 @@ namespace kmx::gis
                 {
                     // Point is very close to the origin
                     result.latitude = K::values::zero;
-                    result.height =
-                        -ellip.b; // Height relative to ellipsoid surface at origin (closest point is pole b) - or use -a? Using -b.
+                    result.altitude =
+                        -ellip.b; // Altitude relative to ellipsoid surface at origin (closest point is pole b) - or use -a? Using -b.
                     // Alternatively: throw std::runtime_error("Point is near the center of the ellipsoid, geodetic coordinates are
                     // ill-defined.");
                 }
@@ -849,8 +849,8 @@ namespace kmx::gis
                 {
                     // Point is on or very near the Z-axis (pole)
                     result.latitude = std::copysign(K::values::ninety, z); // +/- 90 degrees
-                    // Height is distance along Z from polar surface point
-                    result.height = std::abs(z) - ellip.b; // Height above the semi-minor axis endpoint
+                    // Altitude is distance along Z from polar surface point
+                    result.altitude = std::abs(z) - ellip.b; // Altitude above the semi-minor axis endpoint
                 }
                 // No iteration needed, result is determined. Already normalized implicitly.
                 result.validate(); // Final check
@@ -868,7 +868,7 @@ namespace kmx::gis
             T lat_rad_prev = lat_rad + tolerance * K::values::two; // Ensure first loop runs
 
             T N = ellip.a;         // Radius of curvature in prime vertical
-            T h = K::values::zero; // Ellipsoidal height
+            T h = K::values::zero; // Ellipsoidal altitude
 
             int i = 0;
             for (; i < max_iterations; ++i)
@@ -883,7 +883,7 @@ namespace kmx::gis
 
                 N = ellip.a / std::sqrt(N_denominator_sq);
 
-                // Calculate height h
+                // Calculate altitude h
                 // Avoid division by cos_lat near poles
                 if (std::abs(cos_lat) < K::tolerance::near_zero)
                 {
@@ -944,7 +944,7 @@ namespace kmx::gis
 
             // Store final results
             result.latitude = lat_rad * K::conversions::rad_to_deg;
-            result.height = h;
+            result.altitude = h;
 
             // Normalize the final coordinates (especially longitude)
             result.normalize();
@@ -957,8 +957,8 @@ namespace kmx::gis
         ///
         /// Implements the forward Stereographic projection formula as defined for Stereo70.
         ///
-        /// @param[in] geo The input geodetic coordinate (lat/lon in degrees, height in meters) on the Krasovsky 1940 ellipsoid.
-        /// @return The corresponding Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Height) in meters.
+        /// @param[in] geo The input geodetic coordinate (lat/lon in degrees, altitude in meters) on the Krasovsky 1940 ellipsoid.
+        /// @return The corresponding Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Altitude) in meters.
         /// @throws std::invalid_argument if input `geo` coordinates are invalid (via `geo.validate()`).
         /// @throws std::runtime_error if the coordinate is too close to the antipodal point of the projection origin or if calculation
         /// fails.
@@ -974,7 +974,7 @@ namespace kmx::gis
                 std::abs(geo.longitude - stereo70_params::lon0_deg) < stereo70_params::origin_tol_deg)
             {
                 // At the origin, result is False Easting, False Northing
-                return {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = geo.height};
+                return {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = geo.altitude};
             }
 
             // Convert lat/lon to radians
@@ -1020,7 +1020,7 @@ namespace kmx::gis
             const T x_proj = stereo70_params::fe + k_prime * cos_chi * sin_lambda;
             const T y_proj = stereo70_params::fn + k_prime * (proj_params.cos_chi0 * sin_chi - proj_params.sin_chi0 * cos_chi * cos_lambda);
 
-            projected_coord<T> result {.x = x_proj, .y = y_proj, .z = geo.height}; // Z coordinate is typically the ellipsoidal height
+            projected_coord<T> result {.x = x_proj, .y = y_proj, .z = geo.altitude}; // Z coordinate is typically the ellipsoidal altitude
 
             // Validate the result (check for NaN/inf)
             // Use the validate method of xyz_coord
@@ -1106,13 +1106,13 @@ namespace kmx::gis
             return geocentric_to_geodetic(wgs84_ecef, wgs84); // Can throw
         }
 
-        /// @brief Converts Stereo70 projected coordinates (X, Y, Z=Height) to Krasovsky 1940 Geodetic coordinates.
+        /// @brief Converts Stereo70 projected coordinates (X, Y, Z=Altitude) to Krasovsky 1940 Geodetic coordinates.
         ///
         /// Implements the inverse Stereographic projection formula as defined for Stereo70, using
         /// a series expansion to convert conformal latitude back to geodetic latitude.
         ///
-        /// @param[in] proj The input Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Height) in meters.
-        /// @return The corresponding geodetic coordinate (lat/lon in degrees, height in meters) on the Krasovsky 1940 ellipsoid. The
+        /// @param[in] proj The input Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Altitude) in meters.
+        /// @return The corresponding geodetic coordinate (lat/lon in degrees, altitude in meters) on the Krasovsky 1940 ellipsoid. The
         /// coordinates are normalized.
         /// @throws std::invalid_argument if input `proj` coordinates are invalid (via `proj.validate()`).
         /// @throws std::runtime_error if the calculation encounters numerical instability or invalid intermediate values.
@@ -1136,7 +1136,7 @@ namespace kmx::gis
             {
                 // At the origin, return the projection origin coordinates
                 // Use lat0_deg, lon0_deg from stereo70_params
-                return {.latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .height = proj.z};
+                return {.latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .altitude = proj.z};
             }
 
             // Calculate intermediate angle 'c'
@@ -1183,7 +1183,7 @@ namespace kmx::gis
                 .latitude = lat_rad * K::conversions::rad_to_deg, // Convert back to degrees
                 .longitude =
                     (proj_params.lon0_rad + lambda_diff) * K::conversions::rad_to_deg, // Add central meridian back, convert to degrees
-                .height = proj.z                                                       // Height is preserved
+                .altitude = proj.z                                                     // Altitude is preserved
             };
 
             // Normalize and validate the final result
