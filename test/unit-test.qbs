@@ -13,7 +13,7 @@ CppApplication {
     files: [
         "src/test.cpp",
     ]
-    cpp.cxxLanguageVersion: "c++2a"
+    cpp.cxxLanguageVersion: "c++20"
     cpp.enableRtti: false
     //cpp.cxxFlags: "-gdwarf-4"
     cpp.includePaths: [

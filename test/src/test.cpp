@@ -8,15 +8,13 @@
 
 namespace kmx::gis
 {
-    using Approx = Catch::Approx;
-
     using T = double;
     using K = constants<T>;
     using conv = conversion<T>;
     using stereo70_params = stereo70::projection_params<T>;
 
     // Define tolerances for checks
-    constexpr T stereo_tolerance_m = 0.01;
+    constexpr T stereo_tolerance_m = 0.001;
     constexpr T wgs84_lonlat_tolerance_deg = 0.0001;
     constexpr T wgs84_h_tolerance_m = 30;
 
@@ -26,25 +24,24 @@ namespace kmx::gis
 
         SECTION("Krasovsky Origin to Stereo70 False Origin")
         {
-            geodetic_coord<T> kraso_origin = {
-                .latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .height = K::value::zero};
+            geodetic_coord<T> kraso_origin = {.latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .height = {}};
 
             // Use internal projection function directly for this test
             stereo70::coordinate<T> proj_origin = conv::krasovsky_geodetic_to_stereo70(kraso_origin);
 
-            CHECK(proj_origin.x == Approx(stereo70_params::fe).margin(origin_tolerance_m));
-            CHECK(proj_origin.y == Approx(stereo70_params::fn).margin(origin_tolerance_m));
+            CHECK(std::abs(proj_origin.x - stereo70_params::fe) < origin_tolerance_m);
+            CHECK(std::abs(proj_origin.y - stereo70_params::fn) < origin_tolerance_m);
         }
 
         SECTION("Stereo70 False Origin to Krasovsky Origin")
         {
-            stereo70::coordinate<T> stereo_origin = {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = K::value::zero};
+            stereo70::coordinate<T> stereo_origin = {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = {}};
 
             // Use internal inverse projection function directly
             geodetic_coord<T> kraso_origin_calc = conv::stereo70_to_krasovsky_geodetic(stereo_origin);
 
-            CHECK(kraso_origin_calc.latitude == Approx(stereo70_params::lat0_deg).margin(stereo70_params::origin_tol_deg));
-            CHECK(kraso_origin_calc.longitude == Approx(stereo70_params::lon0_deg).margin(stereo70_params::origin_tol_deg));
+            CHECK(std::abs(kraso_origin_calc.longitude - stereo70_params::lat0_deg) < stereo70_params::origin_tol_deg);
+            CHECK(std::abs(kraso_origin_calc.longitude - stereo70_params::lon0_deg) < stereo70_params::origin_tol_deg);
         }
     }
 
@@ -81,9 +78,9 @@ namespace kmx::gis
             SECTION("Forward conversion (WGS84 -> Stereo70)")
             {
                 const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in);
-                CHECK(stereo_calc.x == Approx(stereo_expected.x).margin(stereo_tolerance_m));
-                CHECK(stereo_calc.y == Approx(stereo_expected.y).margin(stereo_tolerance_m));
-                CHECK(stereo_calc.z == Approx(stereo_expected.z).margin(wgs84_h_tolerance_m));
+                CHECK(std::abs(stereo_calc.x - stereo_expected.x) < stereo_tolerance_m);
+                CHECK(std::abs(stereo_calc.y - stereo_expected.y) < stereo_tolerance_m);
+                CHECK(std::abs(stereo_calc.z - stereo_expected.z) < wgs84_h_tolerance_m);
             }
 
             SECTION("Round-trip conversion (WGS84 -> Stereo70 -> WGS84)")
@@ -91,9 +88,9 @@ namespace kmx::gis
                 const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in);
                 const auto wgs_rt = conv::stereo70_to_wgs84(stereo_calc);
 
-                CHECK(wgs_rt.latitude == Approx(wgs_in.latitude).margin(wgs84_lonlat_tolerance_deg));
-                CHECK(wgs_rt.longitude == Approx(wgs_in.longitude).margin(wgs84_lonlat_tolerance_deg));
-                CHECK(wgs_rt.height == Approx(wgs_in.height).margin(wgs84_h_tolerance_m));
+                CHECK(std::abs(wgs_rt.latitude - wgs_in.latitude) < wgs84_lonlat_tolerance_deg);
+                CHECK(std::abs(wgs_rt.latitude - wgs_in.latitude) < wgs84_lonlat_tolerance_deg);
+                CHECK(std::abs(wgs_rt.height - wgs_in.height) < wgs84_h_tolerance_m);
             }
         }
     }
@@ -118,9 +115,9 @@ namespace kmx::gis
 
             INFO("Calculated: lat=" << wgs_calc.latitude << " lon=" << wgs_calc.longitude << " alt=" << wgs_calc.height);
 
-            CHECK(wgs_calc.latitude == Approx(wgs_expected.latitude).margin(wgs84_lonlat_tolerance_deg));
-            CHECK(wgs_calc.longitude == Approx(wgs_expected.longitude).margin(wgs84_lonlat_tolerance_deg));
-            CHECK(wgs_calc.height == Approx(wgs_expected.height).margin(wgs84_h_tolerance_m));
+            CHECK(std::abs(wgs_calc.latitude - wgs_expected.latitude) < wgs84_lonlat_tolerance_deg);
+            CHECK(std::abs(wgs_calc.latitude - wgs_expected.latitude) < wgs84_lonlat_tolerance_deg);
+            CHECK(std::abs(wgs_calc.height - wgs_expected.height) < wgs84_h_tolerance_m);
         }
     }
 
