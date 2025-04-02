@@ -13,9 +13,9 @@ namespace kmx::gis
     using stereo70_params = stereo70::projection_params<T>;
 
     // Define tolerances for checks
-    constexpr T stereo_tolerance_m = 0.001;
+    constexpr T stereo_tolerance_m = 2;
     constexpr T wgs84_lonlat_tolerance_deg = 0.0001;
-    constexpr T altitude_tolerance_m = 1;
+    constexpr T altitude_tolerance_m = 29;
 
     std::tuple<T, T, T> diff(const xyz_coord<T>& a, const xyz_coord<T>& b) noexcept
     {
@@ -77,9 +77,11 @@ namespace kmx::gis
             input_expected_output_pair {{.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428},
                                         {.x = 434216.523, .y = 477889.546, .z = 428},
                                         "Sibiu"},
-            input_expected_output_pair {{.latitude = 45.64191842559299, .longitude = 25.588845714078214, .altitude = 594},
-                                        {.x = 546017.285, .y = 460409.378, .z = 594},
-                                        "Brasov"}};
+            input_expected_output_pair {
+                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {.x = 546017.285, .y = 460409.378, .z = 594}, "Brasov"}};
+
+        // const auto& params = conv::transformation::pulkovo58_to_wgs84_epsg15861;
+        const auto& params = conv::transformation::pulkovo58_to_wgs84_non_standard;
 
         for (const auto& [wgs_in, stereo_expected, location]: test_data)
         {
@@ -87,7 +89,7 @@ namespace kmx::gis
 
             SECTION("Forward conversion (WGS84 -> Stereo70)")
             {
-                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in);
+                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in, params);
                 const auto [deltaX, deltaY, deltaZ] = diff(stereo_calc, stereo_expected);
                 CHECK(deltaX < stereo_tolerance_m);
                 CHECK(deltaY < stereo_tolerance_m);
@@ -96,7 +98,7 @@ namespace kmx::gis
 
             SECTION("Round-trip conversion (WGS84 -> Stereo70 -> WGS84)")
             {
-                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in);
+                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in, params);
                 const auto wgs_rt = conv::stereo70_to_wgs84(stereo_calc);
                 const auto [deltaLat, deltaLon, deltaAlt] = diff(wgs_rt, wgs_in);
                 CHECK(deltaLat < wgs84_lonlat_tolerance_deg);

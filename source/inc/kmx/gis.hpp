@@ -1,19 +1,6 @@
-// Copyright (c) 2025 - present KMX Systems. All rights reserved.
-/// @file gis_core.hpp
-/// @brief Defines core constants, data structures, and conversion functions for GIS operations.
-///
-/// This header provides fundamental building blocks for Geographic Information Systems (GIS)
-/// calculations, including template-based constants, ellipsoid definitions, coordinate
-/// structures (geodetic, geocentric/XYZ), Helmert transformation parameters, and functions
-/// for coordinate conversions between different systems (WGS84, Stereo70, Geocentric).
-/// It utilizes C++20 features like `<numbers>` and concepts implicitly via `static_assert`.
-///
-/// @note This file assumes a C++20 compliant compiler.
-/// @warning Does not use PCH if PCH is not defined.
-
 #ifndef PCH
     #include <algorithm> ///< For std::clamp
-    #include <cmath> ///< For std::sqrt, std::sin, std::cos, std::atan, std::atan2, std::hypot, std::abs, std::copysign, std::pow, std::isfinite
+    #include <cmath> ///< For std::sqrt, std::sin, std::cos, std::atan, std::atan2, std::hypot, std::abs, std::copysign, std::pow, std::isfinite, std::fmod
     #include <limits>      ///< For std::numeric_limits
     #include <numbers>     ///< Requires C++20, for std::numbers::pi_v
     #include <stdexcept>   ///< For std::invalid_argument, std::runtime_error
@@ -307,7 +294,11 @@ namespace kmx::gis
                 throw std::invalid_argument("Helmert scale parameter (ds_ppm) must be finite");
 
             // Optionally, validate the calculated scale factor is usable (e.g., not near zero if division is needed)
-            if (std::abs(scale_factor()) < K::tolerance::near_zero)
+            const T scale = scale_factor();
+            if (!std::isfinite(scale))
+                throw std::invalid_argument("Helmert scale factor calculates to non-finite value.");
+
+            if (std::abs(scale) < K::tolerance::near_zero)
                 throw std::invalid_argument("Helmert scale factor is dangerously close to zero.");
         }
     };
@@ -349,22 +340,17 @@ namespace kmx::gis
             latitude = std::clamp(latitude, -K::values::ninety, K::values::ninety);
 
             // Normalize longitude to the range (-180, 180]
-            // fmod approach: longitude = std::fmod(longitude + K::values::one_eighty, K::values::three_sixty) - K::values::one_eighty;
-            // Handle the case where result is exactly -180, map it to +180? The loop does (-180, 180].
-            while (longitude > K::values::one_eighty)
-                longitude -= K::values::three_sixty;
-            while (longitude <= -K::values::one_eighty) // Use <= to map -180 to range boundary handled by next loop
-                longitude += K::values::three_sixty;
-            // The interval is now (-180, 180]. If longitude was exactly -180, it becomes +180.
-            // Let's refine to ensure (-180, 180] is strictly enforced if needed, or [-180, 180)
-            if (longitude == -K::values::one_eighty)
-            {
-                // Some conventions prefer [-180, 180), others (-180, 180].
-                // The loop above results in (-180, 180]. Stick with that unless required otherwise.
-                // If [-180, 180) is needed:
-                // longitude = std::fmod(std::fmod(longitude, K::values::three_sixty) + K::values::three_sixty, K::values::three_sixty);
-                // // -> [0, 360) if (longitude >= K::values::one_eighty) longitude -= K::values::three_sixty; // -> [-180, 180)
-            }
+            // Use fmod for potentially better performance on some platforms, handling edge cases.
+            if (!std::isfinite(longitude))
+                return; // Avoid fmod with non-finite values
+
+            longitude = std::fmod(longitude, K::values::three_sixty); // -> (-360, 360)
+
+            if (longitude > K::values::one_eighty)
+                longitude -= K::values::three_sixty;      // -> (-180, 180]
+            else if (longitude <= -K::values::one_eighty) // Catches <= -180
+                longitude += K::values::three_sixty;      // -> (-180, 180] (maps -180 to +180)
+            // Result is in (-180, 180]
         }
 
         /// @brief Validates the geodetic coordinates.
@@ -381,8 +367,9 @@ namespace kmx::gis
             if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude))
                 throw std::invalid_argument("Geodetic coordinates (latitude, longitude, altitude) must be finite");
             // Use a small tolerance for latitude range check if needed due to floating point inaccuracies?
-            // Sticking to strict comparison for now.
-            if (latitude < -K::values::ninety || latitude > K::values::ninety)
+            // Sticking to strict comparison for now. Add epsilon if required.
+            constexpr T lat_tolerance = K::tolerance::near_zero; // Use a small tolerance
+            if (latitude < (-K::values::ninety - lat_tolerance) || latitude > (K::values::ninety + lat_tolerance))
                 throw std::invalid_argument("Latitude must be between -90 and 90 degrees (got " + std::to_string(latitude) + ")");
             // Longitude validation might be needed depending on context, but normalize() handles wrapping.
             // Altitude validation (e.g., reasonableness) is context-dependent and not done here.
@@ -393,8 +380,8 @@ namespace kmx::gis
     ///
     /// This structure is used for various Cartesian systems, such as Earth-Centered, Earth-Fixed (ECEF)
     /// geocentric coordinates or projected coordinates (often using X for Easting, Y for Northing,
-    /// and Z optionally for altitude or elevation). Coordinates are typically in meters.
-    /// Coordinates are mutable.
+    /// and Z optionally for altitude or elevation, **but axis meaning can vary by CRS definition**).
+    /// Coordinates are typically in meters. Coordinates are mutable.
     ///
     /// @tparam T The floating-point type (e.g., `float`, `double`, `long double`) for the coordinate values.
     ///           Must satisfy `std::is_floating_point_v<T>`.
@@ -404,9 +391,9 @@ namespace kmx::gis
         /// @brief Static assertion to ensure T is a floating-point type.
         static_assert(std::is_floating_point_v<T>);
 
-        T x {}; ///< X coordinate value (e.g., meters in ECEF or Easting in projected).
-        T y {}; ///< Y coordinate value (e.g., meters in ECEF or Northing in projected).
-        T z {}; ///< Z coordinate value (e.g., meters in ECEF or Altitude/Elevation in projected).
+        T x {}; ///< X coordinate value (e.g., meters in ECEF; Northing in EPSG:31700).
+        T y {}; ///< Y coordinate value (e.g., meters in ECEF; Easting in EPSG:31700).
+        T z {}; ///< Z coordinate value (e.g., meters in ECEF or Altitude/Elevation).
 
         /// @brief Validates that the X, Y, Z coordinates are finite numbers.
         ///
@@ -428,8 +415,9 @@ namespace kmx::gis
 
     /// @brief Alias for `xyz_coord<T>` representing projected (map) coordinates.
     ///
-    /// Typically, X maps to Easting, Y maps to Northing, and Z represents altitude/elevation
-    /// above a reference surface (often the geoid or ellipsoid, depending on the projection definition).
+    /// Note: The meaning of X and Y depends on the specific Projected Coordinate Reference System (CRS).
+    /// For EPSG:31700 (Stereo 70), X represents Northing and Y represents Easting.
+    /// Z typically represents altitude/elevation above a reference surface.
     /// @tparam T The floating-point type for coordinate values.
     template <typename T>
     using projected_coord = xyz_coord<T>;
@@ -445,17 +433,19 @@ namespace kmx::gis
     } // namespace wgs84
 
     /// @namespace kmx::gis::stereo70
-    /// @brief Contains types and parameters specific to the Romanian Stereo70 projection system.
+    /// @brief Contains types and parameters specific to the Romanian Stereo70 projection system (EPSG:31700).
     ///
-    /// Stereo70 is based on the Krasovsky 1940 ellipsoid and uses a Stereographic projection.
+    /// Stereo70 is based on the Krasovsky 1940 ellipsoid and uses an Oblique Stereographic projection.
+    /// The coordinate system definition (EPSG:31700) uses X for Northing and Y for Easting.
     namespace stereo70
     {
         /// @brief Alias for `projected_coord<T>` representing coordinates in the Stereo70 system.
+        /// @note For Stereo70 (EPSG:31700), the `x` member holds Northing and the `y` member holds Easting.
         /// @tparam T The floating-point type for coordinate values.
         template <typename T>
         using coordinate = projected_coord<T>;
 
-        /// @brief Defines the core projection parameters for the Stereo70 system.
+        /// @brief Defines the core projection parameters for the Stereo70 system (EPSG:31700).
         ///
         /// These are the fundamental constants defining the Stereo70 projection,
         /// such as the latitude/longitude of origin, scale factor, and false easting/northing.
@@ -467,15 +457,15 @@ namespace kmx::gis
         {
             /// @brief Static assertion to ensure T is a floating-point type.
             static_assert(std::is_floating_point_v<T>);
-            /// @brief Latitude of the projection origin (degrees).
+            /// @brief Latitude of the projection origin (degrees). EPSG:8801
             static constexpr T lat0_deg = T(46.0);
-            /// @brief Longitude of the projection origin / Central Meridian (degrees).
+            /// @brief Longitude of the projection origin / Central Meridian (degrees). EPSG:8802
             static constexpr T lon0_deg = T(25.0);
-            /// @brief Scale factor at the projection origin.
+            /// @brief Scale factor at the projection origin. EPSG:8805
             static constexpr T k0 = T(0.99975);
-            /// @brief False Easting applied to the X coordinate (meters).
+            /// @brief False Easting applied to the Y coordinate (meters). EPSG:8806
             static constexpr T fe = T(500000.0);
-            /// @brief False Northing applied to the Y coordinate (meters).
+            /// @brief False Northing applied to the X coordinate (meters). EPSG:8807
             static constexpr T fn = T(500000.0);
 
             // Tolerances specific to Stereo70 calculations
@@ -495,13 +485,13 @@ namespace kmx::gis
     /// - Geodetic to Geocentric (ECEF)
     /// - Geocentric (ECEF) to Geodetic
     /// - Helmert transformation (forward and reverse)
-    /// - Krasovsky Geodetic to Stereo70 Projected
-    /// - Stereo70 Projected to Krasovsky Geodetic
+    /// - Krasovsky Geodetic to Stereo70 Projected (EPSG:31700 convention: X=Northing, Y=Easting)
+    /// - Stereo70 Projected (EPSG:31700 convention) to Krasovsky Geodetic
     /// - WGS84 Geodetic to Stereo70 Projected (via Helmert and Krasovsky)
     /// - Stereo70 Projected to WGS84 Geodetic (via Krasovsky and Helmert)
     ///
     /// It utilizes predefined ellipsoids (WGS84, Krasovsky 1940) and default Helmert parameters
-    /// (Pulkovo 1958 to WGS84).
+    /// (Pulkovo 1942/58 to WGS84).
     ///
     /// @tparam T The floating-point type (e.g., `float`, `double`, `long double`) used for calculations.
     ///           Must satisfy `std::is_floating_point_v<T>`.
@@ -514,31 +504,93 @@ namespace kmx::gis
         using stereo70_params = stereo70::projection_params<T>;
 
         // Ellipsoid definitions
-        /// @brief Definition of the Krasovsky 1940 ellipsoid.
+        /// @brief Definition of the Krasovsky 1940 ellipsoid (EPSG:7024).
         static constexpr ellipsoid<T> krasovsky1940 {
             T(6378245.0), // a (meters)
             T(298.3)      // 1/f (inverse flattening)
         };
 
-        /// @brief Definition of the WGS84 ellipsoid.
+        /// @brief Definition of the WGS84 ellipsoid (EPSG:7030).
         static constexpr ellipsoid<T> wgs84 {
             T(6378137.0),    // a (meters)
             T(298.257223563) // 1/f (inverse flattening)
         };
 
-        /// @brief Default Helmert parameters for transforming from Pulkovo 1942/58 datum (approximated via Krasovsky) to WGS84.
-        /// @note These are approximate parameters often used for Romanian transformations. Specific applications might require
-        /// different parameter sets. The sign convention matches the Coordinate Frame Rotation method used in
-        /// `helmert_transformation_forward` and
-        /// `_reverse`.
-        static constexpr helmert_params<T> pulkovo58_to_wgs84 {
-            .dx = T(33.4),       // meters
-            .dy = T(-146.6),     // meters
-            .dz = T(-76.3),      // meters
-            .rx_sec = T(-0.359), // arcseconds
-            .ry_sec = T(-0.053), // arcseconds
-            .rz_sec = T(0.844),  // arcseconds
-            .ds_ppm = T(-0.84)   // parts per million
+        // Helmert Parameter Sets
+        struct transformation
+        {
+            /// @brief Commonly cited Helmert parameters for Pulkovo 1942/Stereo70 to WGS84 transformation in Romania.
+            /// @note These parameters **do not correspond to a standard EPSG transformation code**. Their origin is unclear
+            ///       (potentially older standard, software default, or approximation). Use with caution as accuracy and
+            ///       area of validity are undefined. They use the Coordinate Frame Rotation convention (EPSG:9607)
+            ///       defining the transformation FROM Pulkovo 1942/58 TO WGS84.
+            static constexpr helmert_params<T> pulkovo58_to_wgs84_non_standard {
+                .dx = T(33.4),       // meters
+                .dy = T(-146.6),     // meters
+                .dz = T(-76.3),      // meters
+                .rx_sec = T(-0.359), // arcseconds
+                .ry_sec = T(-0.053), // arcseconds
+                .rz_sec = T(0.844),  // arcseconds
+                .ds_ppm = T(-0.84)   // parts per million
+            };
+
+            /// @brief Helmert parameters based on EPSG Transformation Code 1838.
+            /// @name Dealul Piscului 1970 to WGS 84 (1)
+            /// @source_crs EPSG:4317 - Dealul Piscului 1970
+            /// @target_crs EPSG:4326 - WGS 84
+            /// @accuracy ~2 meters.
+            /// @area Romania - onshore.
+            /// @method Coordinate Frame rotation (EPSG:9607).
+            /// @note Uses parameters defining the transformation FROM Dealul Piscului 1970 TO WGS84.
+            ///       Zero rotations (rx, ry, rz) are specified in the official EPSG definition for this code.
+            static constexpr helmert_params<T> dealul_piscului_1970_to_wgs84_epsg1838 {
+                .dx = T(33.51),    // meters
+                .dy = T(-145.13),  // meters
+                .dz = T(-75.91),   // meters
+                .rx_sec = T(0.0),  // arcseconds
+                .ry_sec = T(0.0),  // arcseconds
+                .rz_sec = T(0.0),  // arcseconds
+                .ds_ppm = T(-0.82) // parts per million
+            };
+
+            /// @brief Helmert parameters based on EPSG Transformation Code 15861.
+            /// @name Pulkovo 1942(58) to WGS 84 (1)
+            /// @source_crs EPSG:4179 - Pulkovo 1942(58)
+            /// @target_crs EPSG:4326 - WGS 84
+            /// @accuracy ~1 meter.
+            /// @area Europe - FSU onshore; Afghanistan; Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary; Mongolia;
+            /// Poland; Romania; Slovakia.
+            /// @method Coordinate Frame rotation (EPSG:9607).
+            /// @note Uses parameters defining the transformation FROM Pulkovo 1942(58) TO WGS84. Often associated with Stereo 70 workflows.
+            static constexpr helmert_params<T> pulkovo58_to_wgs84_epsg15861 {
+                .dx = T(24.986),     // meters
+                .dy = T(-128.922),   // meters
+                .dz = T(-83.764),    // meters
+                .rx_sec = T(-0.018), // arcseconds
+                .ry_sec = T(0.027),  // arcseconds
+                .rz_sec = T(0.854),  // arcseconds
+                .ds_ppm = T(0.09)    // parts per million
+            };
+
+            /// @brief Helmert parameters based on EPSG Transformation Code 1241.
+            /// @name Pulkovo 1942 to WGS 84 (3)
+            /// @source_crs EPSG:4284 - Pulkovo 1942
+            /// @target_crs EPSG:4326 - WGS 84
+            /// @accuracy ~3 meters.
+            /// @area Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary; Poland; Romania; Slovakia; FSU - onshore west of
+            /// 87°E.
+            /// @method Coordinate Frame rotation (EPSG:9607).
+            /// @note Uses parameters defining the transformation FROM Pulkovo 1942 TO WGS84.
+            ///       Zero rotations for Rx, Ry are specified in the official EPSG definition.
+            static constexpr helmert_params<T> pulkovo42_to_wgs84_epsg1241 {
+                .dx = T(24.0),      // meters
+                .dy = T(-124.0),    // meters
+                .dz = T(-79.0),     // meters
+                .rx_sec = T(0.0),   // arcseconds
+                .ry_sec = T(0.0),   // arcseconds
+                .rz_sec = T(-0.15), // arcseconds
+                .ds_ppm = T(0.09)   // parts per million
+            };
         };
 
         /// @brief Pre-calculates and stores derived parameters needed for Stereo70 projection conversions.
@@ -610,6 +662,7 @@ namespace kmx::gis
                 // Ensure W1 = sqrt(W1^2) is real and positive
                 if (w1_sq <= K::values::zero)
                     return std::numeric_limits<T>::quiet_NaN(); // Invalid input latitude or eccentricity
+
                 const T w1 = std::sqrt(w1_sq);
 
                 // Denominator = W1 * cos(chi0)
@@ -669,8 +722,8 @@ namespace kmx::gis
         }; // end struct derived_params
 
         /// @brief Static constant instance of the derived projection parameters for Stereo70/Krasovsky.
-        /// Initialized at compile time (or first use for static local).
-        static constexpr derived_params proj_params {};
+        /// Initialized at compile time (or first use for static local). Error during init will throw.
+        static inline const derived_params proj_params {}; // Use inline for C++17 onwards
 
         // Static Helper Functions
 
@@ -702,6 +755,8 @@ namespace kmx::gis
                 // This case implies e >= 1/|sin(lat)|. If e < 1, this shouldn't happen.
                 // If it does, result is likely infinite or undefined. Return pole latitude.
                 return std::copysign(K::math::half_pi, lat_rad);
+                // Consider returning NaN or throwing if this is truly exceptional
+                // return std::numeric_limits<T>::quiet_NaN();
             }
 
             // Term 1: tan(π/4 + φ/2)
@@ -713,14 +768,21 @@ namespace kmx::gis
             const T term2_den = K::values::one + esin_lat;
 
             // Check for division by zero or negative base for power term
+            // Denominator check: |1 + e*sin(lat)| near zero implies e*sin(lat) near -1
             if (std::abs(term2_den) < K::tolerance::near_zero)
-                return std::numeric_limits<T>::quiet_NaN();                   // Division by zero
-            if (term2_num <= K::values::zero || term2_den <= K::values::zero) // Base must be positive for real power e/2
-                // This condition (term2_num <= 0 or term2_den <= 0) implies |e*sin(lat)| >= 1, handled above.
-                // Re-check anyway for robustness.
-                return std::numeric_limits<T>::quiet_NaN(); // Or return pole latitude?
-
+            {
+                // This case is highly unlikely for valid e < 1, implies e is near 1 and lat is near -pi/2
+                return std::numeric_limits<T>::quiet_NaN(); // Indicate calculation failure
+            }
+            // Numerator check: (1 - e*sin(lat)) <= 0 implies e*sin(lat) >= 1, handled above.
+            // Base = num/den. If base <= 0, power term is problematic.
             const T term2_base = term2_num / term2_den;
+            if (term2_base <= K::tolerance::near_zero)
+            { // Check base is positive
+                // This case is also highly unlikely for valid e < 1.
+                return std::numeric_limits<T>::quiet_NaN(); // Indicate calculation failure
+            }
+
             const T term2 = std::pow(term2_base, e * K::values::half);
 
             // Argument for final atan: term1 * term2
@@ -768,15 +830,13 @@ namespace kmx::gis
             // Calculate N, the radius of curvature in the prime vertical
             const T n_denominator_sq = K::values::one - ellip.e2 * sin_lat * sin_lat;
             // Check if denominator is positive before sqrt
-            if (n_denominator_sq <= K::values::zero) // Should not happen for valid latitudes and e < 1
+            if (n_denominator_sq <= K::tolerance::near_zero) // Use tolerance, though strict <= 0 is often sufficient
                 throw std::runtime_error(
                     "Invalid geodetic coordinate or ellipsoid parameter leading to non-positive N denominator squared: " +
                     std::to_string(n_denominator_sq));
 
             const T n_denominator = std::sqrt(n_denominator_sq);
-            if (std::abs(n_denominator) < K::tolerance::near_zero) // Should be covered by above check, but for safety
-                throw std::runtime_error("Invalid geodetic coordinate or ellipsoid parameter leading to near-zero N denominator: " +
-                                         std::to_string(n_denominator));
+            // No need to check n_denominator near zero again, covered by the check above.
 
             const T N = ellip.a / n_denominator;
             const T h = geo.altitude; // Ellipsoidal altitude
@@ -840,20 +900,24 @@ namespace kmx::gis
                 {
                     // Point is very close to the origin
                     result.latitude = K::values::zero;
-                    result.altitude =
-                        -ellip.b; // Altitude relative to ellipsoid surface at origin (closest point is pole b) - or use -a? Using -b.
-                    // Alternatively: throw std::runtime_error("Point is near the center of the ellipsoid, geodetic coordinates are
-                    // ill-defined.");
+                    // Altitude relative to ellipsoid surface at origin. Closest point is pole at distance b.
+                    // If we consider the origin itself projected onto the surface, altitude is negative b.
+                    result.altitude = -ellip.b;
+                    // Or maybe altitude is distance from origin? result.altitude = -std::hypot(p, z); is near zero.
+                    // Using -b seems conventional for altitude *relative to surface*.
                 }
                 else
                 {
                     // Point is on or very near the Z-axis (pole)
                     result.latitude = std::copysign(K::values::ninety, z); // +/- 90 degrees
-                    // Altitude is distance along Z from polar surface point
+                    // Altitude is distance along Z from polar surface point (distance |z| from origin)
                     result.altitude = std::abs(z) - ellip.b; // Altitude above the semi-minor axis endpoint
                 }
-                // No iteration needed, result is determined. Already normalized implicitly.
-                result.validate(); // Final check
+                // No iteration needed, result is determined. Already normalized implicitly (lon=0).
+                // Need to validate the calculated altitude, could be large negative.
+                if (!std::isfinite(result.altitude)) // Should not happen if inputs are finite
+                    throw std::runtime_error("Non-finite altitude calculated in pole case.");
+                // result.validate(); // Optional final check (redundant with finite check)
                 return result;
             }
 
@@ -864,79 +928,84 @@ namespace kmx::gis
 
             // Initial guess for latitude (based on spherical approximation or reduced latitude)
             // Using atan2(z, p * (1 - e^2)) is a common starting point (related to reduced latitude)
+            // Avoid division by zero if p is extremely small but not caught by pole check (shouldn't happen)
             T lat_rad = std::atan2(z, p * (K::values::one - ellip.e2));
-            T lat_rad_prev = lat_rad + tolerance * K::values::two; // Ensure first loop runs
+            T lat_rad_prev; // = lat_rad + tolerance * K::values::two; // Ensure first loop runs
 
             T N = ellip.a;         // Radius of curvature in prime vertical
             T h = K::values::zero; // Ellipsoidal altitude
 
             int i = 0;
-            for (; i < max_iterations; ++i)
+            do
             {
+                lat_rad_prev = lat_rad; // Store previous latitude for convergence check
+
                 const T sin_lat = std::sin(lat_rad);
                 const T cos_lat = std::cos(lat_rad);
 
                 // Calculate N for the current latitude estimate
                 const T N_denominator_sq = K::values::one - ellip.e2 * sin_lat * sin_lat;
-                if (N_denominator_sq <= K::tolerance::near_zero) // Use tolerance here, check could be <= 0 strictly
+                if (N_denominator_sq <= K::tolerance::near_zero) // Use tolerance here
                     throw std::runtime_error("Numerical instability: N denominator near or below zero during iteration.");
 
                 N = ellip.a / std::sqrt(N_denominator_sq);
 
                 // Calculate altitude h
-                // Avoid division by cos_lat near poles
+                // Avoid division by cos_lat near poles (where p is not near zero)
                 if (std::abs(cos_lat) < K::tolerance::near_zero)
                 {
                     // Near pole: h = |z| / |sin(lat)| - N * (1 - e^2)
-                    // Since sin(lat) will be close to +/- 1, this is safer.
+                    // Since sin(lat) will be close to +/- 1, this is safer. Check sin_lat != 0.
+                    if (std::abs(sin_lat) < K::tolerance::near_zero)
+                        // Should not happen if cos_lat is near zero unless lat is 0 (equator)
+                        throw std::runtime_error("Numerical instability: Both sin(lat) and cos(lat) near zero.");
+
                     h = std::abs(z) / std::abs(sin_lat) - N * (K::values::one - ellip.e2);
-                    // Latitude is already effectively +/- pi/2, refinement below won't help much
-                    // We can perhaps break here if lat_rad is already very close to +/- pi/2?
                 }
                 else
-                {
                     h = p / cos_lat - N;
-                }
 
                 // Update latitude estimate
-                // Avoid singularity if point is near the center (N+h is small)
+                // Formula: lat = atan( Z / (P * (1 - e^2 * N / (N + h))) )
+                // Avoid division by zero if (N+h) is near zero (point near center)
                 const T N_plus_h = N + h;
-                const T center_threshold = K::tolerance::near_zero * ellip.a; // Threshold for being near center
+                // Use a threshold relative to semi-major axis for near-center check
+                const T center_threshold = K::tolerance::near_zero * ellip.a;
 
-                T lat_rad_next;
                 if (std::abs(N_plus_h) < center_threshold)
                 {
                     // Point is very close to the center, latitude is ill-defined.
-                    // Revert to a simple approximation or stick to pole behavior.
-                    // If p > 0 (checked earlier), maybe use atan2(z, p)?
-                    // Or signal failure/stick to previous value? Sticking to pole approx.
-                    lat_rad_next = (std::abs(z) < center_threshold) ? K::values::zero : // Assume equatorial plane if z is also small
-                                                                      std::copysign(K::math::half_pi, z);              // Stick to pole otherwise
-                    // Convergence check might fail here, potentially leading to max iterations.
-                    // Consider breaking? For now, let it continue.
-                }
-                else
-                {
-                    // Standard iteration formula: lat = atan( Z / (P * (1 - e^2 * N / (N + h))) )
-                    const T lat_denom = p * (K::values::one - ellip.e2 * N / N_plus_h);
-                    if (std::abs(lat_denom) < center_threshold) // Check denominator too (though N+h check helps)
-                    {
-                        // Denominator near zero implies point is near Z-axis (pole)
-                        lat_rad_next = std::copysign(K::math::half_pi, z);
-                    }
-                    else
-                    {
-                        lat_rad_next = std::atan2(z, lat_denom);
-                    }
+                    // This might happen if iteration goes wrong or input is truly near center.
+                    // Revert to a simple approximation based on Z and P.
+                    // Let previous loop check handle convergence based on the last valid lat_rad.
+                    // Or signal failure / stick to previous value?
+                    throw std::runtime_error("Numerical instability: Point projects near ellipsoid center (N+h near zero).");
+                    // Or maybe break and use lat_rad_prev? For now, throw.
                 }
 
-                lat_rad_prev = lat_rad;
-                lat_rad = lat_rad_next;
+                const T lat_denom_factor = ellip.e2 * N / N_plus_h;
+                // Check if |lat_denom_factor| >= 1 (should not happen if h > -N*(1-e^2))
+                if (std::abs(lat_denom_factor) >= K::values::one)
+                    throw std::runtime_error("Numerical instability: Invalid factor e^2*N/(N+h) >= 1.");
+
+                const T lat_denom = p * (K::values::one - lat_denom_factor);
+
+                if (std::abs(lat_denom) < center_threshold) // Check denominator too (implies point is near Z-axis/pole)
+                {
+                    // Denominator near zero implies point is near Z-axis (pole)
+                    lat_rad = std::copysign(K::math::half_pi, z);
+                    // Let convergence check handle if it's stable here.
+                }
+                else
+                    lat_rad = std::atan2(z, lat_denom);
 
                 // Check for convergence
                 if (std::abs(lat_rad - lat_rad_prev) < tolerance)
                     break; // Converged
-            }
+
+                i++;
+
+            } while (i < max_iterations);
 
             // Check if max iterations were reached without convergence
             if (i >= max_iterations)
@@ -946,19 +1015,20 @@ namespace kmx::gis
             result.latitude = lat_rad * K::conversions::rad_to_deg;
             result.altitude = h;
 
-            // Normalize the final coordinates (especially longitude)
+            // Normalize the final coordinates (especially longitude, clamp latitude)
             result.normalize();
             // Final validation of calculated results
-            result.validate(); // Throws if result is invalid (e.g., NaN)
+            result.validate(); // Throws if result is invalid (e.g., NaN, lat out of range)
             return result;
         }
 
         /// @brief Converts Krasovsky 1940 Geodetic coordinates to Stereo70 projected coordinates.
         ///
-        /// Implements the forward Stereographic projection formula as defined for Stereo70.
+        /// Implements the forward Oblique Stereographic projection formula as defined for Stereo70 (EPSG:9809).
+        /// Outputs coordinates according to EPSG:31700 axis definition: X = Northing, Y = Easting.
         ///
         /// @param[in] geo The input geodetic coordinate (lat/lon in degrees, altitude in meters) on the Krasovsky 1940 ellipsoid.
-        /// @return The corresponding Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Altitude) in meters.
+        /// @return The corresponding Stereo70 projected coordinate (X=Northing, Y=Easting, Z=Altitude) in meters.
         /// @throws std::invalid_argument if input `geo` coordinates are invalid (via `geo.validate()`).
         /// @throws std::runtime_error if the coordinate is too close to the antipodal point of the projection origin or if calculation
         /// fails.
@@ -972,10 +1042,8 @@ namespace kmx::gis
             // Use tolerances defined in stereo70_params
             if (std::abs(geo.latitude - stereo70_params::lat0_deg) < stereo70_params::origin_tol_deg &&
                 std::abs(geo.longitude - stereo70_params::lon0_deg) < stereo70_params::origin_tol_deg)
-            {
-                // At the origin, result is False Easting, False Northing
-                return {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = geo.altitude};
-            }
+                // At the origin, result is False Northing (X), False Easting (Y)
+                return {.x = stereo70_params::fn, .y = stereo70_params::fe, .z = geo.altitude};
 
             // Convert lat/lon to radians
             const T lat_rad = geo.latitude * K::conversions::deg_to_rad;
@@ -991,11 +1059,23 @@ namespace kmx::gis
 
             // Calculate longitude difference (lambda) relative to the central meridian, normalized to (-pi, pi]
             T lambda_diff = lon_rad - proj_params.lon0_rad;
-            // Normalize lambda_diff to (-pi, pi] range
-            while (lambda_diff > K::math::pi)
-                lambda_diff -= K::math::two_pi;
-            while (lambda_diff <= -K::math::pi)
-                lambda_diff += K::math::two_pi;
+            // Normalize lambda_diff to (-pi, pi] range more robustly
+            if (std::isfinite(lambda_diff))
+            {
+                lambda_diff = std::fmod(lambda_diff + K::math::pi, K::math::two_pi); // -> [0, 2pi) or (-2pi, 0)
+                if (lambda_diff < K::values::zero)
+                    lambda_diff += K::math::two_pi; // -> [0, 2pi)
+                lambda_diff -= K::math::pi; // -> [-pi, pi) -- adjusted to match common convention, should be (-pi, pi]? Check usage.
+                // Let's stick to atan2 range standard (-pi, pi]
+                while (lambda_diff > K::math::pi)
+                    lambda_diff -= K::math::two_pi;
+                while (lambda_diff <= -K::math::pi)
+                    lambda_diff += K::math::two_pi;
+            }
+            else
+            {
+                throw std::runtime_error("Non-finite longitude difference calculated.");
+            }
 
             const T sin_lambda = std::sin(lambda_diff);
             const T cos_lambda = std::cos(lambda_diff);
@@ -1013,19 +1093,23 @@ namespace kmx::gis
             if (!std::isfinite(k_prime)) // Check if k_prime is valid
                 throw std::runtime_error("Projection scale factor (k_prime) calculation resulted in non-finite value.");
 
-            // Calculate Easting (X) and Northing (Y)
-            // X = FE + k' * cos(chi) * sin(lambda)
-            // Y = FN + k' * (cos(chi0)*sin(chi) - sin(chi0)*cos(chi)*cos(lambda))
-            // Use fe, fn from stereo70_params
-            const T x_proj = stereo70_params::fe + k_prime * cos_chi * sin_lambda;
-            const T y_proj = stereo70_params::fn + k_prime * (proj_params.cos_chi0 * sin_chi - proj_params.sin_chi0 * cos_chi * cos_lambda);
+            // Calculate standard Easting (x_std) and Northing (y_std)
+            // x_std = k' * cos(chi) * sin(lambda)
+            // y_std = k' * (cos(chi0)*sin(chi) - sin(chi0)*cos(chi)*cos(lambda))
+            const T std_easting = k_prime * cos_chi * sin_lambda;
+            const T std_northing = k_prime * (proj_params.cos_chi0 * sin_chi - proj_params.sin_chi0 * cos_chi * cos_lambda);
 
-            projected_coord<T> result {.x = x_proj, .y = y_proj, .z = geo.altitude}; // Z coordinate is typically the ellipsoidal altitude
+            // Apply false easting/northing according to EPSG:31700 convention
+            // X = False Northing + standard Northing
+            // Y = False Easting + standard Easting
+            const T final_northing_X = stereo70_params::fn + std_northing;
+            const T final_easting_Y = stereo70_params::fe + std_easting;
+
+            // Assign to result struct according to EPSG:31700 (X=Northing, Y=Easting)
+            projected_coord<T> result {
+                .x = final_northing_X, .y = final_easting_Y, .z = geo.altitude}; // Z coordinate is typically the ellipsoidal altitude
 
             // Validate the result (check for NaN/inf)
-            // Use the validate method of xyz_coord
-            if (!std::isfinite(result.x) || !std::isfinite(result.y)) // Basic check, validate() is more robust
-                throw std::runtime_error("Non-finite projection result (X or Y).");
             result.validate(); // Throws std::invalid_argument if non-finite
 
             return result;
@@ -1038,17 +1122,19 @@ namespace kmx::gis
         /// 2. WGS84 ECEF -> Pulkovo ECEF (using reverse Helmert transformation) (`helmert_transformation_reverse`)
         /// 3. Pulkovo ECEF -> Krasovsky Geodetic (`geocentric_to_geodetic`)
         /// 4. Krasovsky Geodetic -> Stereo70 Projected (`krasovsky_geodetic_to_stereo70`)
+        /// Resulting Stereo70 coordinates follow EPSG:31700 convention (X=Northing, Y=Easting).
         ///
         /// @param[in] wgs84_coord The input WGS84 geodetic coordinate.
-        /// @param[in] params The Helmert transformation parameters to go from WGS84 to the system
-        ///                   underlying Krasovsky/Stereo70 (typically Pulkovo 1942/58). Defaults to
-        ///                   `conversion<T>::pulkovo58_to_wgs84` (which needs reversal).
-        /// @return The corresponding Stereo70 projected coordinate.
+        /// @param[in] params The Helmert transformation parameters defining the transformation FROM the system
+        ///                   underlying Krasovsky/Stereo70 (typically Pulkovo 1942/58) TO WGS84.
+        ///                   Defaults to `conversion<T>::pulkovo58_to_wgs84`. The reverse transformation is applied.
+        /// @return The corresponding Stereo70 projected coordinate (X=Northing, Y=Easting, Z=Altitude).
         /// @throws std::invalid_argument if input `wgs84_coord` or `params` are invalid.
         /// @throws std::runtime_error if any intermediate conversion step fails.
         /// @sa stereo70_to_wgs84()
         [[nodiscard]] static stereo70::coordinate<T> wgs84_to_stereo70(
-            const wgs84::coordinate<T>& wgs84_coord, const helmert_params<T>& params = conversion<T>::pulkovo58_to_wgs84) noexcept(false)
+            const wgs84::coordinate<T>& wgs84_coord,
+            const helmert_params<T>& params = conversion<T>::transformation::dealul_piscului_1970_to_wgs84_epsg1838) noexcept(false)
         {
             // Validate inputs
             params.validate();      // Throws if Helmert params invalid
@@ -1057,7 +1143,7 @@ namespace kmx::gis
             // Step 1: WGS84 Geodetic -> WGS84 ECEF
             const auto wgs84_ecef = geodetic_to_geocentric(wgs84_coord, wgs84); // Can throw
 
-            // Step 2: WGS84 ECEF -> Pulkovo ECEF (using REVERSE Helmert, as params are defined Pulkovo->WGS84)
+            // Step 2: WGS84 ECEF -> Pulkovo ECEF (using REVERSE Helmert)
             const auto pulkovo_ecef = helmert_transformation_reverse(wgs84_ecef, params); // Can throw
 
             // Step 3: Pulkovo ECEF -> Krasovsky Geodetic
@@ -1065,53 +1151,57 @@ namespace kmx::gis
             const auto krasovsky_geo = geocentric_to_geodetic(pulkovo_ecef, krasovsky1940); // Can throw
 
             // Step 4: Krasovsky Geodetic -> Stereo70 Projected
+            // This function now correctly returns X=Northing, Y=Easting
             return krasovsky_geodetic_to_stereo70(krasovsky_geo); // Can throw
         }
 
         /// @brief Converts Stereo70 projected coordinates to WGS84 Geodetic coordinates.
         ///
+        /// Assumes input Stereo70 coordinates follow EPSG:31700 convention (X=Northing, Y=Easting).
         /// This is the inverse composite transformation:
         /// 1. Stereo70 Projected -> Krasovsky Geodetic (`stereo70_to_krasovsky_geodetic`)
         /// 2. Krasovsky Geodetic -> Pulkovo ECEF (`geodetic_to_geocentric`)
         /// 3. Pulkovo ECEF -> WGS84 ECEF (using forward Helmert transformation) (`helmert_transformation_forward`)
         /// 4. WGS84 ECEF -> WGS84 Geodetic (`geocentric_to_geodetic`)
         ///
-        /// @param[in] stereo_coord The input Stereo70 projected coordinate.
-        /// @param[in] params The Helmert transformation parameters to go from the system
-        ///                   underlying Krasovsky/Stereo70 (typically Pulkovo 1942/58) to WGS84.
-        ///                   Defaults to `conversion<T>::pulkovo58_to_wgs84`.
+        /// @param[in] stereo_coord The input Stereo70 projected coordinate (X=Northing, Y=Easting, Z=Altitude).
+        /// @param[in] params The Helmert transformation parameters defining the transformation FROM the system
+        ///                   underlying Krasovsky/Stereo70 (typically Pulkovo 1942/58) TO WGS84.
+        ///                   Defaults to `conversion<T>::pulkovo58_to_wgs84`. The forward transformation is applied.
         /// @return The corresponding WGS84 geodetic coordinate. The coordinates are normalized.
         /// @throws std::invalid_argument if input `stereo_coord` or `params` are invalid.
         /// @throws std::runtime_error if any intermediate conversion step fails.
         /// @sa wgs84_to_stereo70()
         [[nodiscard]] static wgs84::coordinate<T> stereo70_to_wgs84(
             const stereo70::coordinate<T>& stereo_coord,
-            const helmert_params<T>& params = conversion<T>::pulkovo58_to_wgs84) noexcept(false)
+            const helmert_params<T>& params = conversion<T>::transformation::dealul_piscului_1970_to_wgs84_epsg1838) noexcept(false)
         {
             // Validate inputs
             params.validate();       // Throws if Helmert params invalid
-            stereo_coord.validate(); // Throws if Stereo70 coords invalid
+            stereo_coord.validate(); // Throws if Stereo70 coords invalid (finite check)
 
             // Step 1: Stereo70 Projected -> Krasovsky Geodetic
+            // This function now correctly interprets input X=Northing, Y=Easting
             const auto krasovsky_geo = stereo70_to_krasovsky_geodetic(stereo_coord); // Can throw
 
             // Step 2: Krasovsky Geodetic -> Pulkovo ECEF
             // Note: Assumes Pulkovo ECEF is compatible with Krasovsky ellipsoid for geodetic conversion
             const auto pulkovo_ecef = geodetic_to_geocentric(krasovsky_geo, krasovsky1940); // Can throw
 
-            // Step 3: Pulkovo ECEF -> WGS84 ECEF (using FORWARD Helmert, as params are defined Pulkovo->WGS84)
-            const auto wgs84_ecef = helmert_transformation_forward(pulkovo_ecef, params); // No throw expected here, just calculation
+            // Step 3: Pulkovo ECEF -> WGS84 ECEF (using FORWARD Helmert)
+            const auto wgs84_ecef = helmert_transformation_forward(pulkovo_ecef, params); // Calculation, should not throw if inputs valid
 
             // Step 4: WGS84 ECEF -> WGS84 Geodetic
             return geocentric_to_geodetic(wgs84_ecef, wgs84); // Can throw
         }
 
-        /// @brief Converts Stereo70 projected coordinates (X, Y, Z=Altitude) to Krasovsky 1940 Geodetic coordinates.
+        /// @brief Converts Stereo70 projected coordinates (X=Northing, Y=Easting, Z=Altitude) to Krasovsky 1940 Geodetic coordinates.
         ///
-        /// Implements the inverse Stereographic projection formula as defined for Stereo70, using
-        /// a series expansion to convert conformal latitude back to geodetic latitude.
+        /// Implements the inverse Oblique Stereographic projection formula as defined for Stereo70 (EPSG:9809),
+        /// using a series expansion to convert conformal latitude back to geodetic latitude.
+        /// Expects input coordinates according to EPSG:31700 axis definition: X = Northing, Y = Easting.
         ///
-        /// @param[in] proj The input Stereo70 projected coordinate (X=Easting, Y=Northing, Z=Altitude) in meters.
+        /// @param[in] proj The input Stereo70 projected coordinate (X=Northing, Y=Easting, Z=Altitude) in meters.
         /// @return The corresponding geodetic coordinate (lat/lon in degrees, altitude in meters) on the Krasovsky 1940 ellipsoid. The
         /// coordinates are normalized.
         /// @throws std::invalid_argument if input `proj` coordinates are invalid (via `proj.validate()`).
@@ -1122,24 +1212,23 @@ namespace kmx::gis
             // Validate input projected coordinate
             proj.validate(); // Throws std::invalid_argument if invalid
 
-            // Calculate coordinates relative to false origin
-            // Use fe, fn from stereo70_params
-            const T x_rel = proj.x - stereo70_params::fe;
-            const T y_rel = proj.y - stereo70_params::fn;
+            // Calculate coordinates relative to false origin, respecting EPSG:31700 axis convention.
+            // Standard formulas use x' (relative easting) and y' (relative northing).
+            // Input proj.x is Northing, proj.y is Easting.
+            const T y_prime = proj.x - stereo70_params::fn; // Relative Northing (matches y' in standard formulas)
+            const T x_prime = proj.y - stereo70_params::fe; // Relative Easting (matches x' in standard formulas)
 
-            // Calculate distance rho from the false origin
-            const T rho = std::hypot(x_rel, y_rel);
+            // Calculate distance rho from the projection center (using relative easting/northing)
+            const T rho = std::hypot(x_prime, y_prime);
 
             // Handle the origin case
             // Use tolerance defined in stereo70_params
             if (rho < stereo70_params::origin_proj_tol)
-            {
                 // At the origin, return the projection origin coordinates
                 // Use lat0_deg, lon0_deg from stereo70_params
                 return {.latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .altitude = proj.z};
-            }
 
-            // Calculate intermediate angle 'c'
+            // Calculate intermediate angle 'c' (angular distance on conformal sphere)
             // tan(c/2) = rho / (2 * N0)
             // Use pre-calculated inv_two_n0 = 1 / (2 * N0)
             if (!std::isfinite(proj_params.inv_two_n0)) // Check if precalculated value is valid
@@ -1153,19 +1242,24 @@ namespace kmx::gis
             const T sin_c = std::sin(c);
             const T cos_c = std::cos(c);
 
-            // Calculate conformal latitude (chi)
-            // sin(chi) = cos(c)*sin(chi0) + (y' * sin(c) * cos(chi0) / rho)
-            const T chi_arg_num = cos_c * proj_params.sin_chi0 + (y_rel * sin_c * proj_params.cos_chi0 / rho);
+            // Calculate conformal latitude (chi) of the point
+            // Formula: sin(chi) = cos(c)*sin(chi0) + (y' * sin(c) * cos(chi0) / rho)
+            // Check rho is not zero before dividing (handled by origin check, but safety)
+            if (std::abs(rho) < K::tolerance::near_zero)
+                // Should be caught by origin_proj_tol check
+                throw std::runtime_error("Numerical instability: rho is near zero after origin check.");
+
+            const T chi_arg_num = cos_c * proj_params.sin_chi0 + (y_prime * sin_c * proj_params.cos_chi0 / rho);
             // Clamp the argument to [-1, 1] before asin to handle potential floating point inaccuracies
             const T chi_arg = std::clamp(chi_arg_num, -K::values::one, K::values::one);
             const T chi = std::asin(chi_arg);
             if (!std::isfinite(chi)) // Check result of asin
                 throw std::runtime_error("Failed to calculate valid conformal latitude (chi) in inverse projection.");
 
-            // Calculate longitude difference (lambda)
-            // tan(lambda) = (x' * sin(c)) / (rho * cos(chi0) * cos(c) - y' * sin(chi0) * sin(c))
-            const T lambda_diff_num = x_rel * sin_c;
-            const T lambda_diff_den = rho * proj_params.cos_chi0 * cos_c - y_rel * proj_params.sin_chi0 * sin_c;
+            // Calculate longitude difference (lambda) relative to the central meridian
+            // Formula: tan(lambda) = (x' * sin(c)) / (rho * cos(chi0) * cos(c) - y' * sin(chi0) * sin(c))
+            const T lambda_diff_num = x_prime * sin_c;
+            const T lambda_diff_den = rho * proj_params.cos_chi0 * cos_c - y_prime * proj_params.sin_chi0 * sin_c;
             // Use atan2 for correct quadrant
             const T lambda_diff = std::atan2(lambda_diff_num, lambda_diff_den);
             if (!std::isfinite(lambda_diff)) // Check result of atan2
@@ -1173,7 +1267,7 @@ namespace kmx::gis
 
             // Calculate geodetic latitude (lat_rad) from conformal latitude (chi) using series expansion
             // lat = chi + C1*sin(2chi) + C2*sin(4chi) + C3*sin(6chi) + C4*sin(8chi)
-            // Use pre-calculated coefficients c1, c2, c3, c4
+            // Use pre-calculated coefficients c1, c2, c3, c4 from proj_params
             const T lat_rad = calculate_geodetic_latitude_series(chi, proj_params.c1, proj_params.c2, proj_params.c3, proj_params.c4);
             if (!std::isfinite(lat_rad)) // Check result of series calculation
                 throw std::runtime_error("Failed to calculate valid geodetic latitude (lat_rad) from series expansion.");
@@ -1230,7 +1324,7 @@ namespace kmx::gis
         /// where rx, ry, rz are rotation angles in radians.
         ///
         /// @param[in] source The source geocentric coordinate (X, Y, Z).
-        /// @param[in] params The Helmert parameters defining the transformation FROM source TO target.
+        /// @param[in] params The Helmert parameters defining the transformation FROM source TO target. Must be validated beforehand.
         /// @return The transformed geocentric coordinate in the target system.
         /// @note Assumes `params` have been validated. Does not throw exceptions itself but relies on finite inputs.
         /// @sa helmert_transformation_reverse()
@@ -1261,20 +1355,25 @@ namespace kmx::gis
         /// Transforms coordinates FROM the target system TO the source system defined by `params` (e.g., WGS84 ECEF -> Pulkovo ECEF).
         /// Inverts the forward transformation.
         /// Formula (derived from forward, small angle approximation):
-        ///   Let X' = (X_target - dx) / (1+ds), Y' = (Y_target - dy) / (1+ds), Z' = (Z_target - dz) / (1+ds)
-        ///   X_source = X' + rz*Y' - ry*Z'
-        ///   Y_source = -rz*X' + Y' + rx*Z'
-        ///   Z_source = ry*X' - rx*Y' + Z'
-        /// where rx, ry, rz are rotation angles in radians.
+        ///   Let X' = (X_target - dx), Y' = (Y_target - dy), Z' = (Z_target - dz)
+        ///   X_source = (X' + rz*Y' - ry*Z') / (1+ds) -> Incorrect, rotation needs to be applied after scaling
+        ///   Correct approach:
+        ///   X_s = (X_t - dx), Y_s = (Y_t - dy), Z_s = (Z_t - dz) ; remove translation
+        ///   X_r = X_s / scale, Y_r = Y_s / scale, Z_r = Z_s / scale ; remove scale
+        ///   X_source = X_r + rz*Y_r - ry*Z_r ; apply inverse rotation (transposed matrix for small angles)
+        ///   Y_source = -rz*X_r + Y_r + rx*Z_r
+        ///   Z_source = ry*X_r - rx*Y_r + Z_r
         ///
         /// @param[in] target The target geocentric coordinate (X, Y, Z) - the coordinate we are transforming FROM.
-        /// @param[in] params The Helmert parameters defining the transformation FROM source TO target.
+        /// @param[in] params The Helmert parameters defining the transformation FROM source TO target. Must be validated beforehand.
         /// @return The transformed geocentric coordinate in the source system.
-        /// @throws std::runtime_error if the scale factor is too close to zero, preventing inversion.
-        /// @note Assumes `params` have been validated for finiteness, but checks scale factor for inversion.
+        /// @throws std::runtime_error if the scale factor is too close to zero, preventing inversion (should be caught by param
+        /// validation).
+        /// @note Assumes `params` have been validated for finiteness and non-zero scale factor.
         /// @sa helmert_transformation_forward()
-        [[nodiscard]] static geocentric_coord<T> helmert_transformation_reverse(const geocentric_coord<T>& target,
-                                                                                const helmert_params<T>& params) noexcept(false)
+        [[nodiscard]] static geocentric_coord<T> helmert_transformation_reverse(
+            const geocentric_coord<T>& target,
+            const helmert_params<T>& params) noexcept(false) // Can technically still fail if scale is bad despite validation
         {
             // Get parameters in needed units
             const T rx = params.rx_rad();          // Rotation around X in radians
@@ -1282,28 +1381,37 @@ namespace kmx::gis
             const T rz = params.rz_rad();          // Rotation around Z in radians
             const T scale = params.scale_factor(); // (1 + ds)
 
-            // Check if scale factor is valid for division
+            // Check if scale factor is valid for division (redundant if params.validate() was called, but safe)
             if (std::abs(scale) < K::tolerance::near_zero)
                 throw std::runtime_error("Invalid scale factor (near zero: " + std::to_string(scale) +
                                          ") in reverse Helmert transformation, cannot invert.");
 
             const T inv_scale = K::values::one / scale;
 
-            // Reverse translation and scale
+            // Reverse translation
             const T x_temp = target.x - params.dx;
             const T y_temp = target.y - params.dy;
             const T z_temp = target.z - params.dz;
 
+            // Reverse scale
             const T x_scaled = x_temp * inv_scale;
             const T y_scaled = y_temp * inv_scale;
             const T z_scaled = z_temp * inv_scale;
 
-            // Apply inverse rotation (transpose of rotation matrix for small angles)
+            // Apply inverse rotation (transpose of rotation matrix for small angles approximation)
+            // Note: This is the inverse of the Coordinate Frame rotation matrix used in forward.
             const T x_source = x_scaled + rz * y_scaled - ry * z_scaled;
             const T y_source = -rz * x_scaled + y_scaled + rx * z_scaled;
             const T z_source = ry * x_scaled - rx * y_scaled + z_scaled;
 
-            return {.x = x_source, .y = y_source, .z = z_source};
+            // Result validation (check for NaN/Inf which might occur if intermediate values are extreme)
+            geocentric_coord<T> result {.x = x_source, .y = y_source, .z = z_source};
+            // No validate method on geocentric_coord alias directly, but it's an xyz_coord
+            // result.validate(); // Add this check for robustness
+            if (!std::isfinite(result.x) || !std::isfinite(result.y) || !std::isfinite(result.z))
+                throw std::runtime_error("Non-finite result in reverse Helmert transformation.");
+
+            return result;
         }
     }; // end struct conversion
 
