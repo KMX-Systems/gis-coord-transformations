@@ -681,82 +681,159 @@ namespace kmx::gis
         // Helmert Parameter Sets
         struct transformation
         {
-            /// @brief Commonly cited Helmert parameters for Pulkovo 1942/Stereo70 to WGS84 transformation in Romania.
-            /// @note These parameters **do not correspond to a standard EPSG transformation code**. Their origin is unclear
-            ///       (potentially older standard, software default, or approximation). Use with caution as accuracy and
-            ///       area of validity are undefined. They use the Coordinate Frame Rotation convention (EPSG:9607)
-            ///       defining the transformation FROM Pulkovo 1942/58 TO WGS84.
-            static constexpr helmert_params<T> pulkovo58_to_wgs84_non_standard {
-                .dx = T(33.4),                            // meters
-                .dy = T(-146.6),                          // meters
-                .dz = T(-76.3),                           // meters
-                .rx_sec = T(-0.359),                      // arcseconds
-                .ry_sec = T(-0.053),                      // arcseconds
-                .rz_sec = T(0.844),                       // arcseconds
-                .ds_ppm = T(-0.84),                       // parts per million
-                .name = "pulkovo58_to_wgs84_non_standard" // name
-            };
+            /// @brief Helmert parameters based on EPSG Transformation Code 1241.
+            /// @name Pulkovo 1942 to WGS 84 (3)
+            /// @epsg_code 1241
+            /// @source_crs EPSG:4284 - Pulkovo 1942
+            /// @target_crs EPSG:4326 - WGS 84
+            /// @accuracy ~3 meters.
+            /// @area Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary; Poland; Romania; Slovakia; Former Soviet Union -
+            /// onshore west of 87°E.
+            /// @method Coordinate Frame rotation (EPSG:9607). Reverses CFr Bursa-Wolf (geocentric). Sign convention: P1 = P2 + T + D*R*P2.
+            /// @remarks Valid transformation. Uses parameters defining the transformation FROM Pulkovo 1942 TO WGS 84. Note zero rotations
+            /// for Rx, Ry.
+            /// @reference https://epsg.org/transformation_1241/Pulkovo-1942-to-WGS-84-3.html
+            static constexpr helmert_params<T> epsg1241 {.dx = T(24.0),      // meters
+                                                         .dy = T(-124.0),    // meters
+                                                         .dz = T(-79.0),     // meters
+                                                         .rx_sec = T(0.0),   // arcseconds
+                                                         .ry_sec = T(0.0),   // arcseconds
+                                                         .rz_sec = T(-0.15), // arcseconds
+                                                         .ds_ppm = T(0.09),  // parts per million
+                                                         .name = "EPSG:1241 Pulkovo 1942 to WGS 84 (3)"};
 
             /// @brief Helmert parameters based on EPSG Transformation Code 1838.
             /// @name Dealul Piscului 1970 to WGS 84 (1)
+            /// @epsg_code 1838
             /// @source_crs EPSG:4317 - Dealul Piscului 1970
             /// @target_crs EPSG:4326 - WGS 84
             /// @accuracy ~2 meters.
             /// @area Romania - onshore.
-            /// @method Coordinate Frame rotation (EPSG:9607).
-            /// @note Uses parameters defining the transformation FROM Dealul Piscului 1970 TO WGS84.
-            ///       Zero rotations (rx, ry, rz) are specified in the official EPSG definition for this code.
-            static constexpr helmert_params<T> dealul_piscului_1970_to_wgs84_epsg1838 {
-                .dx = T(33.51),                                  // meters
-                .dy = T(-145.13),                                // meters
-                .dz = T(-75.91),                                 // meters
-                .rx_sec = T(0.0),                                // arcseconds
-                .ry_sec = T(0.0),                                // arcseconds
-                .rz_sec = T(0.0),                                // arcseconds
-                .ds_ppm = T(-0.82),                              // parts per million
-                .name = "dealul_piscului_1970_to_wgs84_epsg1838" // name
-            };
+            /// @method Coordinate Frame rotation (EPSG:9607). Reverses CFr Bursa-Wolf (geocentric). Sign convention: P1 = P2 + T + D*R*P2.
+            /// @remarks Valid transformation. Uses parameters defining the transformation FROM Dealul Piscului 1970 TO WGS 84. Note zero
+            /// rotations (rx, ry, rz). Often used for Stereo 70 (EPSG:31700) workflows, which is based on this CRS.
+            /// @reference https://epsg.org/transformation_1838/Dealul-Piscului-1970-to-WGS-84-1.html
+            static constexpr helmert_params<T> epsg1838 {.dx = T(33.51),     // meters
+                                                         .dy = T(-145.13),   // meters
+                                                         .dz = T(-75.91),    // meters
+                                                         .rx_sec = T(0.0),   // arcseconds
+                                                         .ry_sec = T(0.0),   // arcseconds
+                                                         .rz_sec = T(0.0),   // arcseconds
+                                                         .ds_ppm = T(-0.82), // parts per million
+                                                         .name = "EPSG:1838 Dealul Piscului 1970 to WGS 84 (1)"};
 
-            /// @brief Helmert parameters based on EPSG Transformation Code 15861.
-            /// @name Pulkovo 1942(58) to WGS 84 (1)
-            /// @source_crs EPSG:4179 - Pulkovo 1942(58)
+            /// @brief **[OBSOLETE]** Helmert parameters based on **DEPRECATED** EPSG Transformation Code 1839.
+            /// @name Dealul Piscului 1970 to WGS 84 (2)
+            /// @epsg_code 1839
+            /// @source_crs EPSG:4317 - Dealul Piscului 1970
             /// @target_crs EPSG:4326 - WGS 84
-            /// @accuracy ~1 meter.
-            /// @area Europe - FSU onshore; Afghanistan; Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary; Mongolia;
-            /// Poland; Romania; Slovakia.
-            /// @method Coordinate Frame rotation (EPSG:9607).
-            /// @note Uses parameters defining the transformation FROM Pulkovo 1942(58) TO WGS84. Often associated with Stereo 70 workflows.
-            static constexpr helmert_params<T> pulkovo58_to_wgs84_epsg15861 {
-                .dx = T(24.986),                       // meters
-                .dy = T(-128.922),                     // meters
-                .dz = T(-83.764),                      // meters
-                .rx_sec = T(-0.018),                   // arcseconds
-                .ry_sec = T(0.027),                    // arcseconds
-                .rz_sec = T(0.854),                    // arcseconds
-                .ds_ppm = T(0.09),                     // parts per million
-                .name = "pulkovo58_to_wgs84_epsg15861" // name
-            };
+            /// @accuracy ~5 meters.
+            /// @area Romania - onshore.
+            /// @method Geocentric translations (EPSG:9603). Reverses Geoc B-W GeoTr (geocentric). Sign convention: P1 = P2 + T.
+            /// @remarks **DEPRECATED by EPSG.** 3-parameter transformation (translations only). Use EPSG:1838 for better accuracy if
+            /// rotations/scale are significant. This variable was previously mislabeled as epsg31700 (which is the Stereo 70 *projected
+            /// CRS* code).
+            /// @reference https://epsg.org/transformation_1839/Dealul-Piscului-1970-to-WGS-84-2.html (May require login or show as
+            /// deprecated)
+            static constexpr helmert_params<T> epsg1839_obsolete {.dx = T(28.0),    // meters
+                                                                  .dy = T(-121.0),  // meters
+                                                                  .dz = T(-77.0),   // meters
+                                                                  .rx_sec = T(0.0), // arcseconds (Implicitly zero in method 9603)
+                                                                  .ry_sec = T(0.0), // arcseconds (Implicitly zero in method 9603)
+                                                                  .rz_sec = T(0.0), // arcseconds (Implicitly zero in method 9603)
+                                                                  .ds_ppm = T(0.0), // parts per million (Implicitly zero in method 9603)
+                                                                  .name = "EPSG:1839 [DEPRECATED] Dealul Piscului 1970 to WGS 84 (2)"};
 
-            /// @brief Helmert parameters based on EPSG Transformation Code 1241.
-            /// @name Pulkovo 1942 to WGS 84 (3)
+            /// @brief Commonly cited Helmert parameters for Pulkovo 1942(58) / Stereo70 to WGS 84 / ETRS89 transformation in Romania.
+            /// @name Pulkovo 1942(58) to WGS 84 (Romania approx.)
+            /// @epsg_code N/A - Not a standard EPSG transformation code.
+            /// @source_crs Likely intended for EPSG:4179 - Pulkovo 1942(58) (used by Stereo 70)
+            /// @target_crs Likely intended for EPSG:4326 - WGS 84 or EPSG:4258 - ETRS89
+            /// @accuracy Undefined / Varies. ~1-2 meters expected, but area of validity is specific to where parameters were derived.
+            /// @area Romania - intended for Stereo 70 context.
+            /// @method Assumed Coordinate Frame rotation (EPSG:9607 convention).
+            /// @remarks **Non-standard parameters.** Origin unclear (potentially older standard, software default, or local fit). Similar
+            /// parameters appear in various sources related to Romanian Stereo 70 transformations prior to official grid adoption. Use with
+            /// caution. This variable was previously mislabeled as epsg3844 (which is a *projected CRS* code). The identical parameters
+            /// previously listed under `epsg4178` (also a CRS code) are omitted here as redundant.
+            /// @reference See discussion in FOSS4G 2014 slides (slide 18) -
+            /// https://europe.foss4g.org/2014/slides/Daniel%20Urda%20-%20PROJ4%20Issues.The%20case%20of%20Romania2.pdf
+            static constexpr helmert_params<T> pulkovo58_wgs84_ro_approx {
+                .dx = T(33.4),       // meters
+                .dy = T(-146.6),     // meters
+                .dz = T(-76.3),      // meters
+                .rx_sec = T(-0.359), // arcseconds
+                .ry_sec = T(-0.053), // arcseconds
+                .rz_sec = T(0.844),  // arcseconds
+                .ds_ppm = T(-0.84),  // parts per million
+                .name = "Non-EPSG Pulkovo 1942(58) / Stereo70 to WGS84 (Romania Approx)"};
+
+            /// @brief Helmert parameters based on EPSG Transformation Code 1188.
+            /// @name Pulkovo 1942 to WGS 84 (7)
+            /// @epsg_code 1188
             /// @source_crs EPSG:4284 - Pulkovo 1942
             /// @target_crs EPSG:4326 - WGS 84
             /// @accuracy ~3 meters.
-            /// @area Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary; Poland; Romania; Slovakia; FSU - onshore west of
-            /// 87°E.
-            /// @method Coordinate Frame rotation (EPSG:9607).
-            /// @note Uses parameters defining the transformation FROM Pulkovo 1942 TO WGS84.
-            ///       Zero rotations for Rx, Ry are specified in the official EPSG definition.
-            static constexpr helmert_params<T> pulkovo42_to_wgs84_epsg1241 {
-                .dx = T(24.0),                        // meters
-                .dy = T(-124.0),                      // meters
-                .dz = T(-79.0),                       // meters
-                .rx_sec = T(0.0),                     // arcseconds
-                .ry_sec = T(0.0),                     // arcseconds
-                .rz_sec = T(-0.15),                   // arcseconds
-                .ds_ppm = T(0.09),                    // parts per million
-                .name = "pulkovo42_to_wgs84_epsg1241" // name
-            };
+            /// @area Europe - FSU onshore W of 60°E; Albania; Bulgaria; Czechia; Germany - East; Hungary; Poland; Romania; Slovakia.
+            /// @method Coordinate Frame rotation (EPSG:9607). Reverses CFr Bursa-Wolf (geocentric). Sign convention: P1 = P2 + T + D*R*P2.
+            /// @remarks Valid transformation. Uses parameters defining the transformation FROM Pulkovo 1942 TO WGS 84. This variable was
+            /// previously mislabeled as epsg4284 (which is the Pulkovo 1942 *geographic CRS* code).
+            /// @reference https://epsg.org/transformation_1188/Pulkovo-1942-to-WGS-84-7.html
+            static constexpr helmert_params<T> epsg1188 {
+                .dx = T(23.92),     // meters
+                .dy = T(-141.27),   // meters
+                .dz = T(-80.9),     // meters
+                .rx_sec = T(0.0),   // arcseconds (Note: Official EPSG has 0 here, check source if -0 intended)
+                .ry_sec = T(-0.35), // arcseconds
+                .rz_sec = T(0.82),  // arcseconds
+                .ds_ppm = T(-0.12), // parts per million
+                .name = "EPSG:1188 Pulkovo 1942 to WGS 84 (7)"};
+
+            /// @brief Helmert parameters based on EPSG Transformation Code 15861.
+            /// @name Pulkovo 1942(58) to WGS 84 (1)
+            /// @epsg_code 15861
+            /// @source_crs EPSG:4179 - Pulkovo 1942(58)
+            /// @target_crs EPSG:4326 - WGS 84
+            /// @accuracy ~1 meter.
+            /// @area Europe - Former Soviet Union onshore; Afghanistan; Albania; Bulgaria; Czech Republic; Germany - East Germany; Hungary;
+            /// Mongolia; Poland; Romania; Slovakia.
+            /// @method Coordinate Frame rotation (EPSG:9607). Reverses CFr Bursa-Wolf (geocentric). Sign convention: P1 = P2 + T + D*R*P2.
+            /// @remarks Valid transformation. Uses parameters defining the transformation FROM Pulkovo 1942(58) TO WGS 84. This
+            /// transformation is relevant for workflows involving Stereo 70 in Romania, as Stereo 70 is based on Pulkovo 1942(58)
+            /// (EPSG:4179).
+            /// @reference https://epsg.org/transformation_15861/Pulkovo-1942-58-to-WGS-84-1.html
+            static constexpr helmert_params<T> epsg15861 {.dx = T(24.986),     // meters
+                                                          .dy = T(-128.922),   // meters
+                                                          .dz = T(-83.764),    // meters
+                                                          .rx_sec = T(-0.018), // arcseconds
+                                                          .ry_sec = T(0.027),  // arcseconds
+                                                          .rz_sec = T(0.854),  // arcseconds
+                                                          .ds_ppm = T(0.09),   // parts per million
+                                                          .name = "EPSG:15861 Pulkovo 1942(58) to WGS 84 (1)"};
+
+            /// @brief Helmert parameters defined by ANCPI (Romanian Cadastre Agency) often used as an approximation for Stereo 70 <->
+            /// ETRS89/WGS 84.
+            /// @name Stereo 70 (Pulkovo 1942(58)) to ETRS89/WGS 84 (ANCPI approximation)
+            /// @epsg_code N/A - Not an EPSG transformation code. Defined by national authority.
+            /// @source_crs Implicitly EPSG:4179 - Pulkovo 1942(58) (used by Stereo 70 - EPSG:31700)
+            /// @target_crs Implicitly EPSG:4258 - ETRS89 (often treated as equivalent to WGS 84 - EPSG:4326 for this accuracy)
+            /// @accuracy Variable, represents an average fit. Better accuracy typically achieved using the official RONET grid
+            /// transformation (NTv2 format). Likely ~0.5-1 meter average.
+            /// @area Romania - specific to ANCPI regulations.
+            /// @method Assumed Coordinate Frame rotation (EPSG:9607 convention). Parameters define Stereo70 -> ETRS89.
+            /// @remarks **Non-standard EPSG parameters.** These values originate from Romanian national geodetic regulations (e.g., ANCPI
+            /// Order 79/2010 or similar) and represent a Helmert approximation of the official grid-based transformation between Stereo 70
+            /// and ETRS89. Use the official grid (`.gsb` file) for highest accuracy cadastral work in Romania.
+            /// @reference ANCPI regulations (e.g., Order 79/2010). Also discussed in FOSS4G 2014 slides (slide 20) -
+            /// https://europe.foss4g.org/2014/slides/Daniel%20Urda%20-%20PROJ4%20Issues.The%20case%20of%20Romania2.pdf
+            static constexpr helmert_params<T> ancpi_stereo70_etrs89_approx {.dx = T(2.3283),          // meters
+                                                                             .dy = T(-147.0416),       // meters
+                                                                             .dz = T(-92.0802),        // meters
+                                                                             .rx_sec = T(-0.30924979), // arcseconds
+                                                                             .ry_sec = T(0.32482188),  // arcseconds
+                                                                             .rz_sec = T(0.49730012),  // arcseconds
+                                                                             .ds_ppm = T(5.68907711),  // parts per million
+                                                                             .name = "ANCPI Stereo70 (Pulkovo58) to ETRS89/WGS84 Approx"};
         };
 
         /// @brief Pre-calculates and stores derived parameters needed for Stereo70 projection conversions.
@@ -1296,7 +1373,7 @@ namespace kmx::gis
         /// @sa stereo70_to_wgs84()
         [[nodiscard]] static stereo70::coordinate<T> wgs84_to_stereo70(
             const wgs84::coordinate<T>& coord,
-            const helmert_params<T>& params = conversion<T>::transformation::dealul_piscului_1970_to_wgs84_epsg1838) noexcept(false)
+            const helmert_params<T>& params = conversion<T>::transformation::ancpi_stereo70_etrs89_approx) noexcept(false)
         {
             // Validate inputs
             params.validate(); // Throws if Helmert params invalid
@@ -1344,7 +1421,7 @@ namespace kmx::gis
         /// @sa wgs84_to_stereo70()
         [[nodiscard]] static wgs84::coordinate<T> stereo70_to_wgs84(
             const stereo70::coordinate<T>& coord,
-            const helmert_params<T>& params = conversion<T>::transformation::dealul_piscului_1970_to_wgs84_epsg1838) noexcept(false)
+            const helmert_params<T>& params = conversion<T>::transformation::ancpi_stereo70_etrs89_approx) noexcept(false)
         {
             // Validate inputs
             params.validate(); // Throws if Helmert params invalid
@@ -1368,7 +1445,7 @@ namespace kmx::gis
         /// @brief Convenience operator.
         [[nodiscard]] wgs84::coordinate<T> operator()(
             const stereo70::coordinate<T>& coord,
-            const helmert_params<T>& params = conversion<T>::transformation::dealul_piscului_1970_to_wgs84_epsg1838) noexcept(false)
+            const helmert_params<T>& params = conversion<T>::transformation::ancpi_stereo70_etrs89_approx) noexcept(false)
         {
             return stereo70_to_wgs84(coord, params);
         }

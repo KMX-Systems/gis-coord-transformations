@@ -40,9 +40,6 @@ namespace kmx::gis
         /// @brief Alias for the Helmert parameters struct templated on value_type.
         using helmert_params_t = gis::helmert_params<value_type>;
 
-        /// @brief The number of predefined Helmert transformation parameter sets to use.
-        static constexpr size_t num_helmert_params = 4;
-
     public:
         /// @brief Runs the coordinate conversion process using command-line arguments.
         ///
@@ -68,12 +65,13 @@ namespace kmx::gis
 
             // Define the Helmert parameter sets to be used from the gis::conversion struct.
             using tf = converter_t::transformation;
-            static constexpr std::array<std::reference_wrapper<const helmert_params_t>, num_helmert_params> helmert_params {
-                std::cref(tf::pulkovo58_to_wgs84_non_standard),       ///< Non-standard Pulkovo 1942(58) -> WGS84 params.
-                std::cref(tf::pulkovo42_to_wgs84_epsg1241),           ///< EPSG:1241 Pulkovo 1942 -> WGS84 params.
-                std::cref(tf::pulkovo58_to_wgs84_epsg15861),          ///< EPSG:15861 Pulkovo 1942(58) -> WGS84 params.
-                std::cref(tf::dealul_piscului_1970_to_wgs84_epsg1838) ///< EPSG:1838 Dealul Piscului 1970 -> WGS84 params.
-            };
+            static constexpr std::array<std::reference_wrapper<const helmert_params_t>, 6u> helmert_params {
+                std::cref(tf::ancpi_stereo70_etrs89_approx), // reference
+                std::cref(tf::epsg1241),
+                std::cref(tf::epsg1838),
+                std::cref(tf::pulkovo58_wgs84_ro_approx),
+                std::cref(tf::epsg1188),
+                std::cref(tf::epsg15861)};
 
             // Array to store the results for each Helmert parameter set.
             std::array<output_coord_t, helmert_params.size()> resulted_coords {};
@@ -98,29 +96,48 @@ namespace kmx::gis
                 ++dest; // Move to the next position in the results array.
             }
 
-            // Calculate and print the differences between the first result and the subsequent results.
-            out << "\nDifferences relative to the first result ("
-                << (helmert_params[0].get().name ? helmert_params[0].get().name : "Unnamed") << "):\n";
-            if constexpr (num_helmert_params > 1) // Only calculate differences if there's more than one result.
+            struct difference_info
             {
-                for (size_t i = 1; i < num_helmert_params; ++i)
-                {
-                    // Use the generic diff function (requires appropriate overload for OutputCoordT).
-                    // Assumes diff returns a tuple of differences (dx, dy, dz or dLat, dLon, dAlt).
-                    const auto tuple_diff = diff(resulted_coords.front(), resulted_coords[i]);
-                    using std::get;
-                    using std::setw;
-                    // Print differences with labels (assuming d0, d1, d2 correspond to x/y/z or lat/lon/alt diffs)
-                    out << "Diff vs [" << setw(38) << (helmert_params[i].get().name ? helmert_params[i].get().name : "Unnamed") << "]: ";
-                    out << "d0 = " << std::fixed << std::setprecision(5) << setw(10) << get<0>(tuple_diff)
-                        << ", "; // Adjust precision as needed
-                    out << "d1 = " << std::fixed << std::setprecision(5) << setw(10) << get<1>(tuple_diff) << ", ";
-                    out << "d2 = " << std::fixed << std::setprecision(5) << setw(10) << get<2>(tuple_diff) << std::endl;
-                }
+                std::string_view name {};
+                double d0 {}; // Assuming the diff function returns components convertible to double
+                double d1 {};
+                double d2 {};
+            };
+
+            std::array<difference_info, helmert_params.size() - 1u> diff_results {}; // Value-initialize
+
+            using std::fixed;
+            using std::get;
+            using std::setprecision;
+            using std::setw;
+
+            // Calculate differences and store them in the array.
+            for (size_t i = 0; i < diff_results.size(); ++i)
+            {
+                const size_t original_index = i + 1; // Index in helmert_params and resulted_coords
+                const auto tuple_diff = diff(resulted_coords.front(), resulted_coords[original_index]);
+                diff_results[i] = {.name =
+                                       (helmert_params[original_index].get().name ? helmert_params[original_index].get().name : "Unnamed"),
+                                   .d0 = get<0>(tuple_diff),
+                                   .d1 = get<1>(tuple_diff),
+                                   .d2 = get<2>(tuple_diff)};
             }
-            else
+
+            // Sort the array based on the sum d0 + d1.
+            std::sort(diff_results.begin(), diff_results.end(),
+                      [](const difference_info& a, const difference_info& b) { return (a.d0 + a.d1) < (b.d0 + b.d1); });
+
+            out << "\nSorted Differences by d0+d1 relative to ["
+                << (helmert_params[0].get().name ? helmert_params[0].get().name : "Unnamed") << "]:\n";
+
+            // Print the sorted differences.
+            for (const auto& diff_info: diff_results)
             {
-                out << "(No differences to calculate, only one parameter set used)\n";
+                out << "[" << std::left << setw(62) << diff_info.name << "]: " << std::right;
+                out << "d0=" << fixed << setprecision(5) << setw(10) << diff_info.d0 << ' ';
+                out << "d1=" << fixed << setprecision(5) << setw(10) << diff_info.d1 << ' ';
+                out << "d2=" << fixed << setprecision(5) << setw(10) << diff_info.d2;
+                out << std::endl;
             }
         }
 

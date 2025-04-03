@@ -7,6 +7,10 @@
 /// @param[in] argc Argument count passed from the operating system.
 /// @param[in] argv Argument vector passed from the operating system.
 /// @return 0 on successful execution, 1 on error (e.g., invalid arguments, conversion failure).
+/// @notes Inputs:
+///    46.76952896129325 23.589875634659435 346 (Cluj)
+///    45.79759722839506 24.15208824953577 428 (Sibiu)
+///    45.641962 25.589032 594 (Brasov)
 int main(int argc, char* argv[])
 {
     using T = double;

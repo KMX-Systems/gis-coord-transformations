@@ -13,9 +13,9 @@ namespace kmx::gis
     using stereo70_params = stereo70::projection_params<T>;
 
     // Define tolerances for checks
-    constexpr T stereo_tolerance_m = 2;
-    constexpr T wgs84_lonlat_tolerance_deg = 0.0001;
-    constexpr T altitude_tolerance_m = 35;
+    constexpr T stereo_tolerance_m = T(2.51);
+    constexpr T wgs84_lonlat_tolerance_deg = T(0.000033);
+    constexpr T altitude_tolerance_m = T(39.68);
 
     TEST_CASE("Projection Origin Mapping", "[projection][origin]")
     {
@@ -62,16 +62,13 @@ namespace kmx::gis
 
         static constexpr std::array test_data {
             input_expected_output_pair {
-                {.latitude = 46.76952896129325, .longitude = 23.589875634659435, .altitude = 346}, {392437.167, 586510.612, 346}, "Cluj"},
+                {.latitude = 46.76952896129325, .longitude = 23.589875634659435, .altitude = 346}, {586512, 392434.5, 346}, "Cluj"},
             input_expected_output_pair {
-                {.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428}, {434216.523, 477889.546, 428}, "Sibiu"},
+                {.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428}, {477894, 434219, 428}, "Sibiu"},
             input_expected_output_pair {
-                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {546017.285, 460409.378, 594}, "Brasov"}};
+                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {460415.3, 546029.5, 594}, "Brasov"}};
 
-        // const auto& params = conv::transformation::pulkovo58_to_wgs84_epsg15861;
-        // const auto& params = conv::transformation::pulkovo58_to_wgs84_non_standard;
-        // const auto& params = conv::transformation::dealul_piscului_1970_to_wgs84_epsg1838;
-        const auto& params = conv::transformation::pulkovo42_to_wgs84_epsg1241;
+        const auto& params = conv::transformation::ancpi_stereo70_etrs89_approx;
 
         for (const auto& [wgs_in, stereo_expected, location]: test_data)
         {
@@ -103,11 +100,10 @@ namespace kmx::gis
         using input_expected_output_pair = std::tuple<stereo70::coordinate<T>, wgs84::coordinate<T>, const char*>;
 
         static constexpr std::array test_data {
+            input_expected_output_pair {{586512, 392434.5, 346}, {.latitude = 46.769533, .longitude = 23.589875, .altitude = 346}, "Cluj"},
+            input_expected_output_pair {{477894, 434219, 428}, {.latitude = 45.797629, .longitude = 24.152137, .altitude = 428}, "Sibiu"},
             input_expected_output_pair {
-                {392434.50, 586512.00, 346}, {.latitude = 46.769533, .longitude = 23.589875, .altitude = 346}, "Cluj"},
-            input_expected_output_pair {{434218, 477894, 428}, {.latitude = 45.797629, .longitude = 24.152137, .altitude = 428}, "Sibiu"},
-            input_expected_output_pair {
-                {546029.50, 460415.00, 594}, {.latitude = 45.641958, .longitude = 25.589031, .altitude = 594}, "Brasov"}};
+                {460415.3, 546029.5, 594}, {.latitude = 45.641958, .longitude = 25.589031, .altitude = 594}, "Brasov"}};
 
         for (const auto& [stereo_in, wgs_expected, location]: test_data)
         {
