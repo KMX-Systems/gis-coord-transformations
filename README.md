@@ -4,4 +4,4 @@ It uses Helmert transformations for datum shifts (e.g., WGS84 ECEF <-> Pulkovo E
 
 Includes essential GIS constants, coordinate types, and ellipsoid parameters, built with modern C++ features.
 
-It is a template based header-only C++20 library.
+Template based header-only C++20 library.
