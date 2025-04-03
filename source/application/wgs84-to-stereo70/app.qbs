@@ -3,19 +3,18 @@ import qbs
 CppApplication {
     Depends
     {
-        name: 'gis-coord-conversion'
+        name: 'gis-coord-conversion-lib'
     }
 
-    name: "gis-coord-conversion-test"
+    name: "gis-coord-conversion-app-wgs84-to-stereo70"
     consoleApplication: true
     cpp.debugInformation: true
 
     files: [
-        "src/test.cpp",
+        "src/kmx/gis/app/wgs84-to-stereo70.cpp",
     ]
-    cpp.cxxLanguageVersion: "c++20"
+    cpp.cxxLanguageVersion: "c++23"
     cpp.enableRtti: false
-    //cpp.cxxFlags: "-gdwarf-4"
     cpp.includePaths: [
         "inc",
         "inc_dep"

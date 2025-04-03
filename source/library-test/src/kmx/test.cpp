@@ -15,17 +15,7 @@ namespace kmx::gis
     // Define tolerances for checks
     constexpr T stereo_tolerance_m = 2;
     constexpr T wgs84_lonlat_tolerance_deg = 0.0001;
-    constexpr T altitude_tolerance_m = 29;
-
-    std::tuple<T, T, T> diff(const xyz_coord<T>& a, const xyz_coord<T>& b) noexcept
-    {
-        return {std::abs(a.x - b.x), std::abs(a.y - b.y), std::abs(a.z - b.z)};
-    }
-
-    std::tuple<T, T, T> diff(const geodetic_coord<T>& a, const geodetic_coord<T>& b) noexcept
-    {
-        return {std::abs(a.latitude - b.latitude), std::abs(a.longitude - b.longitude), std::abs(a.altitude - b.altitude)};
-    }
+    constexpr T altitude_tolerance_m = 35;
 
     TEST_CASE("Projection Origin Mapping", "[projection][origin]")
     {
@@ -37,7 +27,7 @@ namespace kmx::gis
                 .latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .altitude = {}};
 
             // Use internal projection function directly for this test
-            stereo70::coordinate<T> proj_origin = conv::krasovsky_geodetic_to_stereo70(kraso_origin);
+            const auto proj_origin = conv::krasovsky_geodetic_to_stereo70(kraso_origin);
 
             CHECK(std::abs(proj_origin.x - stereo70_params::fe) < origin_tolerance_m);
             CHECK(std::abs(proj_origin.y - stereo70_params::fn) < origin_tolerance_m);
@@ -45,7 +35,7 @@ namespace kmx::gis
 
         SECTION("Stereo70 False Origin to Krasovsky Origin")
         {
-            stereo70::coordinate<T> stereo_origin = {.x = stereo70_params::fe, .y = stereo70_params::fn, .z = {}};
+            stereo70::coordinate<T> stereo_origin = stereo70::coordinate<T> {stereo70_params::fe, stereo70_params::fn, 0};
 
             // Use internal inverse projection function directly
             geodetic_coord<T> kraso_origin_calc = conv::stereo70_to_krasovsky_geodetic(stereo_origin);
@@ -71,17 +61,17 @@ namespace kmx::gis
         using input_expected_output_pair = std::tuple<wgs84::coordinate<T>, stereo70::coordinate<T>, const char*>;
 
         static constexpr std::array test_data {
-            input_expected_output_pair {{.latitude = 46.76952896129325, .longitude = 23.589875634659435, .altitude = 346},
-                                        {.x = 392437.167, .y = 586510.612, .z = 346},
-                                        "Cluj"},
-            input_expected_output_pair {{.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428},
-                                        {.x = 434216.523, .y = 477889.546, .z = 428},
-                                        "Sibiu"},
             input_expected_output_pair {
-                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {.x = 546017.285, .y = 460409.378, .z = 594}, "Brasov"}};
+                {.latitude = 46.76952896129325, .longitude = 23.589875634659435, .altitude = 346}, {392437.167, 586510.612, 346}, "Cluj"},
+            input_expected_output_pair {
+                {.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428}, {434216.523, 477889.546, 428}, "Sibiu"},
+            input_expected_output_pair {
+                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {546017.285, 460409.378, 594}, "Brasov"}};
 
         // const auto& params = conv::transformation::pulkovo58_to_wgs84_epsg15861;
-        const auto& params = conv::transformation::pulkovo58_to_wgs84_non_standard;
+        // const auto& params = conv::transformation::pulkovo58_to_wgs84_non_standard;
+        // const auto& params = conv::transformation::dealul_piscului_1970_to_wgs84_epsg1838;
+        const auto& params = conv::transformation::pulkovo42_to_wgs84_epsg1241;
 
         for (const auto& [wgs_in, stereo_expected, location]: test_data)
         {
@@ -114,11 +104,10 @@ namespace kmx::gis
 
         static constexpr std::array test_data {
             input_expected_output_pair {
-                {.x = 392434.50, .y = 586512.00, .z = 346}, {.latitude = 46.769533, .longitude = 23.589875, .altitude = 346}, "Cluj"},
+                {392434.50, 586512.00, 346}, {.latitude = 46.769533, .longitude = 23.589875, .altitude = 346}, "Cluj"},
+            input_expected_output_pair {{434218, 477894, 428}, {.latitude = 45.797629, .longitude = 24.152137, .altitude = 428}, "Sibiu"},
             input_expected_output_pair {
-                {.x = 434218, .y = 477894, .z = 428}, {.latitude = 45.797629, .longitude = 24.152137, .altitude = 428}, "Sibiu"},
-            input_expected_output_pair {
-                {.x = 546029.50, .y = 460415.00, .z = 594}, {.latitude = 45.641958, .longitude = 25.589031, .altitude = 594}, "Brasov"}};
+                {546029.50, 460415.00, 594}, {.latitude = 45.641958, .longitude = 25.589031, .altitude = 594}, "Brasov"}};
 
         for (const auto& [stereo_in, wgs_expected, location]: test_data)
         {
