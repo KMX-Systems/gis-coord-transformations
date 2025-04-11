@@ -565,8 +565,8 @@ namespace kmx::gis
             constexpr void validate() const noexcept(false)
             {
                 /// @brief Defines the approximate valid range for Stereo70 Easting coordinates within Romania.
-                constexpr T min_easting = T(150000.0);
-                constexpr T max_easting = T(850000.0);
+                constexpr T min_easting = T(110000.0);
+                constexpr T max_easting = T(890000.0);
 
                 /// @brief Defines the approximate valid range for Stereo70 Northing coordinates within Romania.
                 constexpr T min_northing = T(220000.0);

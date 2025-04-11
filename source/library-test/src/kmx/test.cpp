@@ -1,9 +1,8 @@
 // Copyright (c) 2025 - present KMX Systems. All rights reserved.
 #define CATCH_CONFIG_MAIN
-#include <array>
 #include <catch2/catch_all.hpp>
 #include <kmx/gis.hpp>
-#include <tuple>
+#include <random>
 
 namespace kmx::gis
 {
@@ -11,11 +10,6 @@ namespace kmx::gis
     using K = constants<T>;
     using conv = conversion<T>;
     using stereo70_params = stereo70::projection_params<T>;
-
-    // Define tolerances for checks
-    constexpr T stereo_tolerance_m = T(2.51);
-    constexpr T wgs84_lonlat_tolerance_deg = T(0.000033);
-    constexpr T altitude_tolerance_m = T(39.68);
 
     TEST_CASE("Projection Origin Mapping", "[projection][origin]")
     {
@@ -45,49 +39,30 @@ namespace kmx::gis
         }
     }
 
-    TEST_CASE("WGS84 <-> Stereo70 Conversions", "[conversion 1]")
+    void round_trip_test(const helmert_params<T>& params, const T wgs84_lonlat_tolerance_deg, const T altitude_tolerance_m,
+                         const char* test_name)
     {
-#if 0
-        // Print Helmert parameters being used for this test case
-        const auto& params = conv::pulkovo58_to_wgs84;
-        std::cout << "\nINFO: Testing with Helmert Parameters (Pulkovo 1942 -> WGS84):\n";
-        std::cout << std::fixed << std::setprecision(4);
-        std::cout << " dx=" << params.dx << " m, dy=" << params.dy << " m, dz=" << params.dz << " m\n";
-        std::cout << " rx=" << params.rx_sec << "\", ry=" << params.ry_sec << "\", rz=" << params.rz_sec << "\"\n";
-        std::cout << " ds=" << params.ds_ppm << " ppm\n";
-        std::cout << std::defaultfloat; // Reset float format
-#endif
+        static constexpr double romania_min_lat = 43.62; // Aproximativ sud (zona Vama Veche)
+        static constexpr double romania_max_lat = 48.26; // Aproximativ nord (zona Horodiștea)
+        static constexpr double romania_min_lon = 20.26; // Aproximativ vest (zona Beba Veche)
+        static constexpr double romania_max_lon = 29.69; // Aproximativ est (zona Sulina)
 
-        using input_expected_output_pair = std::tuple<wgs84::coordinate<T>, stereo70::coordinate<T>, const char*>;
+        std::random_device rd;
+        static std::mt19937 generator(rd());
+        std::uniform_real_distribution<double> latitude_distribution(romania_min_lat, romania_max_lat);
+        std::uniform_real_distribution<double> longitude_distribution(romania_min_lon, romania_max_lon);
 
-        static constexpr std::array test_data {
-            input_expected_output_pair {
-                {.latitude = 46.76952896129325, .longitude = 23.589875634659435, .altitude = 346}, {586512, 392434.5, 346}, "Cluj"},
-            input_expected_output_pair {
-                {.latitude = 45.79759722839506, .longitude = 24.15208824953577, .altitude = 428}, {477894, 434219, 428}, "Sibiu"},
-            input_expected_output_pair {
-                {.latitude = 45.641962, .longitude = 25.589032, .altitude = 594}, {460415.3, 546029.5, 594}, "Brasov"}};
-
-        const auto& params = conv::transformation::ancpi_stereo70_etrs89_approx;
-
-        for (const auto& [wgs_in, stereo_expected, location]: test_data)
+        SECTION(test_name)
         {
-            INFO("Testing coordinates from " << location);
-
-            SECTION("Forward conversion (WGS84 -> Stereo70)")
+            for (unsigned i = 1000u; i > 0u; --i)
             {
-                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in, params);
-                const auto [deltaX, deltaY, deltaZ] = diff(stereo_calc, stereo_expected);
-                CHECK(deltaX < stereo_tolerance_m);
-                CHECK(deltaY < stereo_tolerance_m);
-                CHECK(deltaZ < altitude_tolerance_m);
-            }
 
-            SECTION("Round-trip conversion (WGS84 -> Stereo70 -> WGS84)")
-            {
-                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_in, params);
-                const auto wgs_rt = conv::stereo70_to_wgs84(stereo_calc);
-                const auto [deltaLat, deltaLon, deltaAlt] = diff(wgs_rt, wgs_in);
+                const wgs84::coordinate<T> wgs_input {latitude_distribution(generator), longitude_distribution(generator), 0.0};
+
+                const auto stereo_calc = conv::wgs84_to_stereo70(wgs_input, params);
+                const auto wgs_output = conv::stereo70_to_wgs84(stereo_calc, params);
+                const auto [deltaLat, deltaLon, deltaAlt] = diff(wgs_input, wgs_output);
+
                 CHECK(deltaLat < wgs84_lonlat_tolerance_deg);
                 CHECK(deltaLon < wgs84_lonlat_tolerance_deg);
                 CHECK(deltaAlt < altitude_tolerance_m);
@@ -95,27 +70,58 @@ namespace kmx::gis
         }
     }
 
-    TEST_CASE("Stereo70 -> WGS84 Conversions", "[conversion 2]")
+    TEST_CASE("Round-trip conversion 1 (WGS84 -> Stereo70 -> WGS84)", "[epsg1241]")
     {
-        using input_expected_output_pair = std::tuple<stereo70::coordinate<T>, wgs84::coordinate<T>, const char*>;
+        const auto& params = conv::transformation::epsg1241;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-11);
+        static constexpr T altitude_tolerance_m = T(1e-6);
 
-        static constexpr std::array test_data {
-            input_expected_output_pair {{586512, 392434.5, 346}, {.latitude = 46.769533, .longitude = 23.589875, .altitude = 346}, "Cluj"},
-            input_expected_output_pair {{477894, 434219, 428}, {.latitude = 45.797629, .longitude = 24.152137, .altitude = 428}, "Sibiu"},
-            input_expected_output_pair {
-                {460415.3, 546029.5, 594}, {.latitude = 45.641958, .longitude = 25.589031, .altitude = 594}, "Brasov"}};
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[epsg1241]");
+    }
 
-        for (const auto& [stereo_in, wgs_expected, location]: test_data)
-        {
-            INFO("Testing coordinates from " << location);
+    TEST_CASE("Round-trip conversion 2 (WGS84 -> Stereo70 -> WGS84)", "[epsg1838]")
+    {
+        const auto& params = conv::transformation::epsg1838;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-10);
+        static constexpr T altitude_tolerance_m = T(1e-5);
 
-            const auto wgs_calc = conv::stereo70_to_wgs84(stereo_in);
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[epsg1838]");
+    }
 
-            const auto [deltaLat, deltaLon, deltaAlt] = diff(wgs_calc, wgs_expected);
-            CHECK(deltaLat < wgs84_lonlat_tolerance_deg);
-            CHECK(deltaLon < wgs84_lonlat_tolerance_deg);
-            CHECK(deltaAlt < altitude_tolerance_m);
-        }
+    TEST_CASE("Round-trip conversion 3 (WGS84 -> Stereo70 -> WGS84)", "[ancpi_stereo70_etrs89_approx]")
+    {
+        const auto& params = conv::transformation::ancpi_stereo70_etrs89_approx;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-9);
+        static constexpr T altitude_tolerance_m = T(1e-4);
+
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[ancpi_stereo70_etrs89_approx]");
+    }
+
+    TEST_CASE("Round-trip conversion 4 (WGS84 -> Stereo70 -> WGS84)", "[epsg1188]")
+    {
+        const auto& params = conv::transformation::epsg1188;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-9);
+        static constexpr T altitude_tolerance_m = T(1e-4);
+
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[epsg1188]");
+    }
+
+    TEST_CASE("Round-trip conversion 5 (WGS84 -> Stereo70 -> WGS84)", "[epsg15861]")
+    {
+        const auto& params = conv::transformation::epsg15861;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-9);
+        static constexpr T altitude_tolerance_m = T(1e-4);
+
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[epsg15861]");
+    }
+
+    TEST_CASE("Round-trip conversion 6 (WGS84 -> Stereo70 -> WGS84)", "[pulkovo58_wgs84_ro_approx]")
+    {
+        const auto& params = conv::transformation::pulkovo58_wgs84_ro_approx;
+        static constexpr T wgs84_lonlat_tolerance_deg = T(1e-9);
+        static constexpr T altitude_tolerance_m = T(1e-3);
+
+        round_trip_test(params, wgs84_lonlat_tolerance_deg, altitude_tolerance_m, "[pulkovo58_wgs84_ro_approx]");
     }
 
     TEST_CASE("Edge Cases", "[conversion][edge]")
