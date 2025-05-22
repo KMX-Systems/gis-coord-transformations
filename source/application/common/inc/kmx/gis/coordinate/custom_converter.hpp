@@ -1,17 +1,12 @@
 /// Copyright (c) 2025 - present KMX Systems. All rights reserved.
 #pragma once
 #ifndef PCH
-    #include <array>       ///< For std::array
-    #include <functional>  ///< For std::reference_wrapper, std::cref
-    #include <iostream>    ///< For std::ostream, std::endl
-    #include <kmx/gis.hpp> ///< Core GIS library header
-    #include <stdexcept>   ///< For std::invalid_argument, std::out_of_range, std::runtime_error
-    #include <string>      ///< For std::string, std::stod, std::to_string
-    #include <string_view> ///< For std::string_view
+    #include <iostream>                          ///< For std::ostream, std::endl
+    #include <kmx/gis/coordinate/conversion.hpp> ///< Core GIS library header
 #endif
 
 // Define the application-specific components within the kmx::gis namespace
-namespace kmx::gis
+namespace kmx::gis::coordinate
 {
     /// @brief Performs coordinate conversions using multiple predefined Helmert transformations.
     ///
@@ -26,7 +21,7 @@ namespace kmx::gis
     /// @tparam OutputCoordT The type of the output coordinate (e.g., `stereo70::coordinate<double>`). Must be default constructible and
     /// assignable. Must have a `print` method.
     template <typename InputCoordT, typename OutputCoordT>
-    class coordinate_converter
+    class custom_converter
     {
     private:
         /// @brief The underlying floating-point type derived from the InputCoordT.
@@ -36,7 +31,7 @@ namespace kmx::gis
         /// @brief Alias for the output coordinate type template parameter.
         using output_coord_t = OutputCoordT;
         /// @brief Alias for the core GIS conversion utility struct templated on value_type.
-        using converter_t = gis::conversion<value_type>;
+        using converter_t = gis::coordinate::conversion<value_type>;
         /// @brief Alias for the Helmert parameters struct templated on value_type.
         using helmert_params_t = gis::helmert_params<value_type>;
 
@@ -242,6 +237,6 @@ namespace kmx::gis
             // return input_coord_t{};
         }
 
-    }; // class coordinate_converter
+    }; // class custom_converter
 
 } // namespace kmx::gis

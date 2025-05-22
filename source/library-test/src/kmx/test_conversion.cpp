@@ -8,7 +8,7 @@ namespace kmx::gis
 {
     using T = double;
     using K = constants<T>;
-    using conv = conversion<T>;
+    using conv = coordinate::conversion<T>;
     using stereo70_params = stereo70::projection_params<T>;
 
     TEST_CASE("Projection Origin Mapping", "[projection][origin]")
@@ -17,7 +17,7 @@ namespace kmx::gis
 
         SECTION("Krasovsky Origin to Stereo70 False Origin")
         {
-            geodetic_coord<T> kraso_origin = {
+            coordinate::geodetic<T> kraso_origin = {
                 .latitude = stereo70_params::lat0_deg, .longitude = stereo70_params::lon0_deg, .altitude = {}};
 
             // Use internal projection function directly for this test
@@ -32,7 +32,7 @@ namespace kmx::gis
             stereo70::coordinate<T> stereo_origin = stereo70::coordinate<T> {stereo70_params::fe, stereo70_params::fn, 0};
 
             // Use internal inverse projection function directly
-            geodetic_coord<T> kraso_origin_calc = conv::stereo70_to_krasovsky_geodetic(stereo_origin);
+            coordinate::geodetic<T> kraso_origin_calc = conv::stereo70_to_krasovsky_geodetic(stereo_origin);
 
             CHECK(std::abs(kraso_origin_calc.latitude - stereo70_params::lat0_deg) < stereo70_params::origin_tol_deg);
             CHECK(std::abs(kraso_origin_calc.longitude - stereo70_params::lon0_deg) < stereo70_params::origin_tol_deg);
@@ -56,7 +56,6 @@ namespace kmx::gis
         {
             for (unsigned i = 1000u; i > 0u; --i)
             {
-
                 const wgs84::coordinate<T> wgs_input {latitude_distribution(generator), longitude_distribution(generator), 0.0};
 
                 const auto stereo_calc = conv::wgs84_to_stereo70(wgs_input, params);

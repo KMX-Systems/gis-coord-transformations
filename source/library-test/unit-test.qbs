@@ -11,9 +11,11 @@ CppApplication {
     cpp.debugInformation: true
 
     files: [
-        "src/kmx/test.cpp",
+        "src/kmx/test_conversion.cpp",
+        "src/kmx/test_coordinates.cpp",
+        "src/kmx/test_mapper.cpp",
     ]
-    cpp.cxxLanguageVersion: "c++20"
+    cpp.cxxLanguageVersion: "c++23"
     cpp.enableRtti: false
     cpp.includePaths: [
         "inc",

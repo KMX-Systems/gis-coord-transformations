@@ -1,4 +1,4 @@
-#include "kmx/gis/coordinate_converter.hpp"
+#include "kmx/gis/coordinate/custom_converter.hpp"
 #include <exception>
 
 /// @brief Main function for the Stereo70 to WGS84 converter.
@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 {
     using T = double;
     using namespace kmx::gis;
-    using app_t = coordinate_converter<stereo70::coordinate<T>, wgs84::coordinate<T>>;
+    using app_t = coordinate::custom_converter<stereo70::coordinate<T>, wgs84::coordinate<T>>;
 
     app_t app {};
 

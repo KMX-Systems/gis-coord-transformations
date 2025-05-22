@@ -1,0 +1,1 @@
+../../../../../../library/inc/kmx/gis/coordinate/stereo70.hpp

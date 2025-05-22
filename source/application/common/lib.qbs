@@ -12,6 +12,6 @@ StaticLibrary {
         "inc_dep"
     ]
     files: [
-        "inc/kmx/gis/coordinate_converter.hpp",
+        "inc/kmx/gis/coordinate/custom_converter.hpp",
     ]
 }
